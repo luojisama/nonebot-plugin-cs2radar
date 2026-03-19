@@ -1,0 +1,66 @@
+[project]
+name = "nonebot-plugin-cs2radar"
+version = "0.1.0"
+description = "NoneBot2 CS2 雷达插件，支持赛事/选手、5E、完美与官匹战绩查询及对局分析"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "luojisama", email = "2534316454@qq.com" },
+]
+license = { text = "MIT" }
+keywords = ["nonebot", "nonebot2", "cs2", "csgo", "5e", "perfectworld", "onebot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+]
+dependencies = [
+    "nonebot2>=2.2.0",
+    "nonebot-adapter-onebot>=2.2.0",
+    "nonebot-plugin-htmlrender>=0.6.0",
+    "nonebot-plugin-localstore>=0.6.0",
+    "httpx>=0.23.0",
+    "jinja2>=3.0.0",
+    "playwright>=1.30.0",
+    "pydantic>=1.10,<3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/luojisama/nonebot-plugin-cs2radar"
+Repository = "https://github.com/luojisama/nonebot-plugin-cs2radar"
+"Bug Tracker" = "https://github.com/luojisama/nonebot-plugin-cs2radar/issues"
+
+[tool.nonebot]
+plugins = ["nonebot_plugin_cs2radar"]
+plugin_dirs = ["nonebot_plugin_cs2radar"]
+
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "/nonebot_plugin_cs2radar/**/*.py",
+    "/nonebot_plugin_cs2radar/templates/*.html",
+    "/README.md",
+    "/LICENSE",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["nonebot_plugin_cs2radar"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/nonebot_plugin_cs2radar",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>CS Match Detail</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --card: #141921;
+      --text: #e8edf5;
+      --muted: #98a3b3;
+      --line: rgba(255, 255, 255, 0.08);
+      --good: #56f090;
+      --bad: #ff5f73;
+      --draw: #ffd166;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      width: 960px;
+      padding: 22px;
+      background: radial-gradient(1200px 300px at 30% 0%, rgba(255,255,255,.06), transparent), var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .board {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    }
+    .top {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(90deg, {{ data.theme_a }}, {{ data.theme_b }});
+    }
+    .title { font-size: 28px; font-weight: 900; letter-spacing: .5px; }
+    .sub { margin-top: 6px; color: rgba(255,255,255,.92); font-size: 14px; }
+    .top-score {
+      margin-top: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.18);
+      font-weight: 900;
+    }
+    .top-score .score { font-size: 28px; }
+    .top-score .tag { font-size: 12px; text-transform: uppercase; opacity: .88; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+      padding: 16px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(255,255,255,.02);
+    }
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px 14px;
+      font-size: 14px;
+    }
+    .meta b { color: var(--muted); font-weight: 600; margin-right: 6px; }
+    .hero {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 8px;
+    }
+    .kpi, .chip {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      background: rgba(255,255,255,.01);
+    }
+    .k { font-size: 11px; color: var(--muted); }
+    .v { margin-top: 6px; font-size: 20px; font-weight: 900; }
+    .highlight-wrap {
+      padding: 0 16px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .highlight-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 8px;
+    }
+    .clutch-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0,1fr));
+      gap: 8px;
+    }
+    .rounds { padding: 0 16px 16px; }
+    .round-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .segment {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,.02);
+    }
+    .segment-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .segment-title { font-size: 16px; font-weight: 800; }
+    .segment-score { font-size: 20px; font-weight: 900; }
+    .round-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .round-box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 6px;
+      text-align: center;
+      background: rgba(255,255,255,.02);
+      min-height: 72px;
+    }
+    .round-box.win { background: rgba(86, 240, 144, .10); }
+    .round-box.loss { background: rgba(255, 95, 115, .10); }
+    .round-box.unknown { background: rgba(255, 209, 102, .10); }
+    .round-no { font-size: 11px; color: var(--muted); }
+    .round-res { margin-top: 4px; font-size: 22px; font-weight: 900; }
+    .round-side, .round-score-after { margin-top: 3px; font-size: 11px; color: var(--muted); }
+    .tables {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 0 16px 16px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      color: var(--muted);
+      text-align: left;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 4px;
+    }
+    tbody td {
+      border-bottom: 1px dashed rgba(255,255,255,.06);
+      padding: 7px 4px;
+    }
+    tbody tr:last-child td { border-bottom: 0; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.self-row td {
+      background: rgba(255,255,255,.06);
+      font-weight: 700;
+    }
+    .llm {
+      margin: 0 16px 0;
+      border: 1px solid var(--line);
+      border-radius: 14px 14px 0 0;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      border-bottom: 0;
+    }
+    .llm h3 { margin: 0; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+    .llm .style {
+      margin-top: 10px;
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: #fff;
+    }
+    .llm .detail {
+      margin-top: 10px;
+      line-height: 1.7;
+      font-size: 14px;
+      color: #d6deeb;
+      white-space: pre-wrap;
+    }
+    .footer {
+      color: var(--muted);
+      text-align: center;
+      font-size: 11px;
+      border: 1px solid var(--line);
+      border-top: 0;
+      padding: 8px;
+      margin: 0 16px 16px;
+      background: rgba(255,255,255,.01);
+      border-radius: 0 0 14px 14px;
+    }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    .draw { color: var(--draw); }
+  </style>
+</head>
+<body>
+  <div class="board">
+    <div class="top">
+      <div class="title">{{ data.platform_label }} 每把详细战绩</div>
+      <div class="sub">{{ data.map_name }} · {{ data.match_type }} · {{ data.start_at }} · 对局ID {{ data.match_id }}</div>
+      <div class="top-score">
+        <span class="tag">Final</span>
+        <span class="score">{{ data.score_text }}</span>
+        <span class="{{ data.result_class }}">{{ data.result_text }}</span>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="panel">
+        <h3>对局信息</h3>
+        <div class="meta">
+          <div><b>结果</b><span class="{{ data.result_class }}">{{ data.result_text }}</span></div>
+          <div><b>玩家</b>{{ data.player.name }}</div>
+          <div><b>总比分</b>{{ data.score_text }}</div>
+          <div><b>时长</b>{{ data.duration_min }} 分钟</div>
+          <div><b>半场</b>{{ data.half_summary }}</div>
+          <div><b>平台标识</b>{{ data.player.uuid }}</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>个人概览</h3>
+        <div class="hero">
+          <div class="kpi"><div class="k">Rating</div><div class="v">{{ data.player.rating }}</div></div>
+          <div class="kpi"><div class="k">ADR</div><div class="v">{{ data.player.adr }}</div></div>
+          <div class="kpi"><div class="k">K / D</div><div class="v">{{ data.player.kill }}/{{ data.player.death }}</div></div>
+          <div class="kpi"><div class="k">爆头率</div><div class="v">{{ data.player.hs }}</div></div>
+          <div class="kpi"><div class="k">Elo</div><div class="v">{{ data.player.elo }}</div></div>
+          <div class="kpi"><div class="k">RWS</div><div class="v">{{ data.player.rws }}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="highlight-wrap">
+      <div class="panel">
+        <h3>高光数据</h3>
+        <div class="highlight-grid">{% for item in data.player_highlights.summary_cards %}<div class="chip"><div class="k">{{ item.label }}</div><div class="v">{{ item.value }}</div></div>{% endfor %}</div>
+      </div>
+      <div class="panel">
+        <h3>残局拆分</h3>
+        <div class="clutch-grid">{% for item in data.player_highlights.clutch_cards %}<div class="chip"><div class="k">{{ item.label }}</div><div class="v">{{ item.value }}</div></div>{% endfor %}</div>
+      </div>
+    </div>
+    <div class="rounds">
+      <div class="panel">
+        <h3>回合走势</h3>
+        <div class="round-list">
+          {% for segment in data.halves %}
+          <div class="segment">
+            <div class="segment-head"><div class="segment-title">{{ segment.label }}</div><div class="segment-score">{{ segment.score_text }}</div></div>
+            {% if segment.rounds %}
+            <div class="round-grid">
+              {% for round in segment.rounds %}
+              <div class="round-box {{ round.result_class }}">
+                <div class="round-no">R{{ round.no }}</div>
+                <div class="round-res">{{ round.result_label }}</div>
+                <div class="round-side">{{ round.side or '' }}</div>
+                <div class="round-score-after">{{ round.score_after or '' }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="round-no">该平台当前接口未返回逐回合明细，仅展示分段比分。</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="tables">
+      <div class="panel">
+        <h3>全队概览</h3>
+        <table>
+          <thead><tr><th>昵称</th><th class="num">R</th><th class="num">ADR</th><th class="num">K/D</th><th class="num">HS%</th></tr></thead>
+          <tbody>
+            {% for p in data.teammates %}
+            <tr class="{{ 'self-row' if p.name == data.player.name else '' }}">
+              <td>{{ p.name }}{{ ' (你)' if p.name == data.player.name else '' }}</td>
+              <td class="num">{{ p.rating }}</td>
+              <td class="num">{{ p.adr }}</td>
+              <td class="num">{{ p.kill }}/{{ p.death }}</td>
+              <td class="num">{{ p.hs }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h3>对手数据</h3>
+        <table>
+          <thead><tr><th>昵称</th><th class="num">R</th><th class="num">ADR</th><th class="num">K/D</th><th class="num">HS%</th></tr></thead>
+          <tbody>
+            {% for p in data.opponents %}
+            <tr>
+              <td>{{ p.name }}</td>
+              <td class="num">{{ p.rating }}</td>
+              <td class="num">{{ p.adr }}</td>
+              <td class="num">{{ p.kill }}/{{ p.death }}</td>
+              <td class="num">{{ p.hs }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="llm">
+      <h3>LLM 评价</h3>
+      <div class="style">{{ data.llm_title }}</div>
+      <div class="detail">{{ data.llm_detail }}</div>
+    </div>
+    <div class="footer">Generated at {{ data.start_at }}</div>
+  </div>
+</body>
+</html>

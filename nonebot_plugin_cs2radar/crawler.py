@@ -3,13 +3,12 @@ from datetime import datetime, timedelta
 import httpx
 from playwright.async_api import async_playwright
 from typing import List, Dict, Any
-import logging
 import urllib.parse
 import json
 
-from .storage import get_pw_session_path, migrate_legacy_file
+from nonebot import logger
 
-logger = logging.getLogger("nonebot")
+from .storage import get_pw_session_path, migrate_legacy_file
 
 
 def _safe_score(value: Any) -> int | None:

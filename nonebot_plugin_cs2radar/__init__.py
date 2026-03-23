@@ -27,7 +27,7 @@ from .renderer import (
 )
 from .storage import get_bind_db_path
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 plugin_config = get_plugin_config(Config)
 driver_config = get_driver().config

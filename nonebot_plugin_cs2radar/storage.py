@@ -17,8 +17,6 @@ LEGACY_DATA_DIRS = [
 
 
 def get_data_dir() -> Path:
-    if hasattr(localstore, "get_data_dir"):
-        return localstore.get_data_dir(PLUGIN_DATA_DIR_NAME)
     return localstore.get_plugin_data_dir()
 
 

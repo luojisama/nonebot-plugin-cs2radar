@@ -1,14 +1,37 @@
 import asyncio
-from datetime import datetime, timedelta
-import httpx
-from playwright.async_api import async_playwright
-from typing import List, Dict, Any
-import urllib.parse
 import json
+import threading
+import urllib.parse
+from datetime import datetime, timedelta
+from typing import Any
 
+import httpx
 from nonebot import logger
+from playwright.async_api import async_playwright
 
+from .security import ensure_private_file, secure_write_json
 from .storage import get_pw_session_path, migrate_legacy_file
+
+FIVE_E_NETWORK_HOST_SUFFIXES = ("5eplay.com", "5eplaycdn.com")
+
+
+def _is_allowed_5e_host(host: str) -> bool:
+    normalized = host.rstrip(".").lower()
+    return any(
+        normalized == suffix or normalized.endswith(f".{suffix}")
+        for suffix in FIVE_E_NETWORK_HOST_SUFFIXES
+    )
+
+
+async def _route_5e_requests(route) -> None:
+    parsed = urllib.parse.urlsplit(route.request.url)
+    if parsed.scheme in {"data", "blob", "about"}:
+        await route.continue_()
+        return
+    if parsed.scheme in {"https", "wss"} and parsed.hostname and _is_allowed_5e_host(parsed.hostname):
+        await route.continue_()
+        return
+    await route.abort("blockedbyclient")
 
 
 def _safe_score(value: Any) -> int | None:
@@ -23,13 +46,14 @@ class FiveEEventCrawler:
         self.matches_url = "https://event.5eplay.com/csgo/matches?grade=1%2C7%2C2%2C3%2C8%2C9"
         self.results_url = "https://event.5eplay.com/csgo/matches?grade=1%2C7%2C2%2C3%2C8%2C9&status=2"
 
-    async def get_matches(self, click_results: bool = False) -> List[Dict[str, Any]]:
+    async def get_matches(self, click_results: bool = False) -> list[dict[str, Any]]:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
+            await page.route("**/*", _route_5e_requests)
             
             try:
                 await page.goto(self.matches_url, wait_until="networkidle", timeout=30000)
@@ -89,10 +113,10 @@ class FiveEEventCrawler:
             finally:
                 await browser.close()
 
-    async def get_results(self) -> List[Dict[str, Any]]:
+    async def get_results(self) -> list[dict[str, Any]]:
         # Use click_results=True to simulate clicking the '赛果' tab
         matches = await self.get_matches(click_results=True)
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         today = datetime.now().date()
         cutoff_date = today - timedelta(days=5)
 
@@ -141,13 +165,14 @@ class FiveEEventCrawler:
             )
         return results
 
-    async def get_events(self) -> List[Dict[str, Any]]:
+    async def get_events(self) -> list[dict[str, Any]]:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
+            await page.route("**/*", _route_5e_requests)
             
             try:
                 await page.goto(self.events_url, wait_until="networkidle", timeout=30000)
@@ -245,15 +270,15 @@ class FiveECrawler:
         """
         Search for players by keywords and return a list of potential domains.
         """
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+        async with async_playwright() as p, await p.chromium.launch(headless=True) as browser:
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
+            await page.route("**/*", _route_5e_requests)
             
             url = self.search_url.format(keywords=urllib.parse.quote(keywords))
-            await page.goto(url, wait_until="networkidle")
+            await page.goto(url, wait_until="networkidle", timeout=30000)
             await asyncio.sleep(2)
             
             users = await page.evaluate("""() => {
@@ -285,16 +310,15 @@ class FiveECrawler:
                 return results;
             }""")
             
-            await browser.close()
             return users
 
     async def get_player_data(self, domain: str):
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+        async with async_playwright() as p, await p.chromium.launch(headless=True) as browser:
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
+            await page.route("**/*", _route_5e_requests)
             
             player_data = {
                 "nickname": "Unknown",
@@ -325,14 +349,14 @@ class FiveECrawler:
                                     "score": role_data.get("score"),
                                     "rarity": role_data.get("rarity")
                                 }
-                    except:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse 5E career response: {exc}")
                 elif "player/best_season" in response.url:
                     try:
                         data = await response.json()
                         player_data["stats"]["best_season"] = data.get("data", {})
-                    except:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse 5E season response: {exc}")
                 elif "player/home" in response.url:
                     try:
                         data = await response.json()
@@ -353,8 +377,8 @@ class FiveECrawler:
                                     "score": role_data.get("score"),
                                     "rarity": role_data.get("rarity")
                                 }
-                    except:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse 5E home response: {exc}")
                 elif "role_position" in response.url:
                     try:
                         resp_data = await response.json()
@@ -393,14 +417,14 @@ class FiveECrawler:
                                 if avatar.startswith('//'):
                                     avatar = 'https:' + avatar
                                 player_data["avatar"] = avatar
-                    except:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse 5E match response: {exc}")
 
             page.on("response", handle_response)
             
             url = self.base_url.format(domain=domain)
-            await page.goto(url, wait_until="networkidle")
-            await page.wait_for_load_state("networkidle")
+            await page.goto(url, wait_until="networkidle", timeout=30000)
+            await page.wait_for_load_state("networkidle", timeout=10000)
             await asyncio.sleep(3) # Increased wait for dynamic data
             
             # Try to get nickname and avatar from the page with more flexible selectors
@@ -430,53 +454,77 @@ class FiveECrawler:
                         elif src.startswith('/'):
                             src = 'https://arena-next.5eplay.com' + src
                         player_data["avatar"] = src
-            except:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to extract 5E profile header: {exc}")
                 
-            await browser.close()
             return player_data
 
 class PWCrawler:
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        token: str = "",
+        steam_id: int = 0,
+        persist_session: bool = False,
+    ):
         self.base_url = "https://api.wmpvp.com/api"
         self.passport_url = "https://passport.pwesports.cn"
         self.app_engine_url = "https://appengine.wmpvp.com"
         self.appversion = "3.5.4.172"
-        self.token = ""
-        self.my_steam_id = 0
-        self.session_file = migrate_legacy_file("pw_session.json", get_pw_session_path())
-        self._load_session()
+        self.token = str(token or "").strip()
+        self.my_steam_id = int(steam_id or 0)
+        self.persist_session = bool(persist_session)
+        self._session_lock = threading.RLock()
+        self.session_file = get_pw_session_path()
+        if self.persist_session:
+            self.session_file = migrate_legacy_file("pw_session.json", self.session_file)
+        if self.persist_session and not self.has_session():
+            self._load_session()
 
     def has_session(self) -> bool:
         return bool(self.token and self.my_steam_id)
 
     def _load_session(self):
         """从文件加载 Session"""
-        if self.session_file.exists():
+        if self.persist_session and self.session_file.exists():
             try:
-                data = json.loads(self.session_file.read_text(encoding="utf-8"))
-                self.token = str(data.get("token") or "").strip()
-                self.my_steam_id = int(data.get("steam_id") or 0)
+                ensure_private_file(self.session_file)
+                with self._session_lock:
+                    data = json.loads(self.session_file.read_text(encoding="utf-8"))
+                    self.token = str(data.get("token") or "").strip()
+                    self.my_steam_id = int(data.get("steam_id") or 0)
                 if self.has_session():
-                    logger.info("Loaded PW session from file.")
+                    logger.info("Loaded PW session from protected file.")
             except Exception as e:
                 logger.error(f"Error loading PW session: {e}")
 
     def _save_session(self):
         """保存 Session 到文件"""
+        if not self.persist_session:
+            return
         try:
-            self.session_file.write_text(
-                json.dumps({"token": self.token, "steam_id": self.my_steam_id}, ensure_ascii=False, indent=4),
-                encoding="utf-8",
-            )
-            logger.info("Saved PW session to file.")
+            with self._session_lock:
+                secure_write_json(
+                    self.session_file,
+                    {"token": self.token, "steam_id": self.my_steam_id},
+                )
+            logger.info("Saved PW session to protected file.")
         except Exception as e:
             logger.error(f"Error saving PW session: {e}")
 
     def set_session(self, token: str, steam_id: int):
-        self.token = str(token or "").strip()
-        self.my_steam_id = int(steam_id or 0)
-        self._save_session()
+        with self._session_lock:
+            self.token = str(token or "").strip()
+            self.my_steam_id = int(steam_id or 0)
+            self._save_session()
+
+    def get_session(self) -> dict[str, Any]:
+        with self._session_lock:
+            return {
+                "token": self.token,
+                "my_steam_id": self.my_steam_id,
+                "appversion": self.appversion,
+            }
 
     def _require_session(self) -> bool:
         if self.has_session():
@@ -484,7 +532,7 @@ class PWCrawler:
         logger.warning("PW session is missing. Run `pwlogin <手机号> <验证码>` first.")
         return False
 
-    async def login(self, mobile: str, code: str) -> Dict[str, Any]:
+    async def login(self, mobile: str, code: str) -> dict[str, Any]:
         """登录完美平台获取 token"""
         url = f"{self.passport_url}/account/login"
         payload = {
@@ -495,6 +543,7 @@ class PWCrawler:
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(url, json=payload)
+                resp.raise_for_status()
                 data = resp.json()
                 if data.get("code") == 0:
                     acc_info = data["result"]["loginResult"]["accountInfo"]
@@ -503,9 +552,9 @@ class PWCrawler:
                 return {"error": data.get("description", "登录失败")}
             except Exception as e:
                 logger.error(f"PW Login Error: {e}")
-                return {"error": str(e)}
+                return {"error": "登录请求失败，请检查网络后重试"}
 
-    async def search_player(self, keyword: str) -> List[Dict[str, Any]]:
+    async def search_player(self, keyword: str) -> list[dict[str, Any]]:
         """搜索完美世界平台玩家"""
         if not self._require_session():
             return []
@@ -521,6 +570,7 @@ class PWCrawler:
         async with httpx.AsyncClient(headers=headers) as client:
             try:
                 resp = await client.post(url, json=payload)
+                resp.raise_for_status()
                 data = resp.json()
                 if data.get("code") == 1:
                     return data.get("result", [])
@@ -529,7 +579,7 @@ class PWCrawler:
                 logger.error(f"Error searching PW player: {e}")
                 return []
 
-    async def get_player_data(self, target_steam_id: str) -> Dict[str, Any]:
+    async def get_player_data(self, target_steam_id: str) -> dict[str, Any]:
         """获取玩家详细战绩"""
         if not self._require_session():
             return {"error": "请先使用 pwlogin 登录完美平台后再查询。"}
@@ -550,6 +600,7 @@ class PWCrawler:
             try:
                 # Fetch detailed stats
                 resp = await client.post(url, json=payload)
+                resp.raise_for_status()
                 data = resp.json()
                 
                 if data.get("statusCode") == 0:
@@ -577,9 +628,9 @@ class PWCrawler:
                     return {"error": error_msg}
             except Exception as e:
                 logger.error(f"Error getting PW player data: {e}")
-                return {"error": f"网络请求失败: {str(e)}"}
+                return {"error": f"网络请求失败: {e!s}"}
 
-    async def get_recent_matches(self, target_steam_id: str, count: int = 5) -> List[Dict[str, Any]]:
+    async def get_recent_matches(self, target_steam_id: str, count: int = 5) -> list[dict[str, Any]]:
         """获取玩家最近比赛记录"""
         if not self._require_session():
             return []
@@ -601,6 +652,7 @@ class PWCrawler:
         async with httpx.AsyncClient(headers=headers, timeout=10.0) as client:
             try:
                 resp = await client.post(url, json=payload)
+                resp.raise_for_status()
                 data = resp.json()
                 if data.get("statusCode") == 0:
                     match_list = data.get("data", {}).get("matchList", [])

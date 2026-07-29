@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
 from .binding_store import BindingStore, UserBinding
-from .storage import get_pw_session_path, migrate_legacy_file
 
 PLATFORM_ALIASES = {
     "5e": "5e",
@@ -74,7 +73,6 @@ class PlayerStats:
     def to_llm_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "uuid": self.uuid,
             "win": self.win,
             "elo_change": self.elo_change,
             "rating": self.rating,
@@ -206,10 +204,14 @@ def _segment_order(segment_key: str) -> tuple[int, int]:
 
 
 class MatchService:
-    def __init__(self, timeout: int = 15) -> None:
+    def __init__(
+        self,
+        timeout: int = 15,
+        pw_session_provider: Callable[[], dict[str, Any]] | None = None,
+    ) -> None:
         self.timeout = timeout
         self._pw_default_appversion = "3.5.4.172"
-        self._pw_session_file = migrate_legacy_file("pw_session.json", get_pw_session_path())
+        self._pw_session_provider = pw_session_provider
 
     @staticmethod
     def normalize_platform(raw: str | None) -> str | None:
@@ -984,16 +986,19 @@ class MatchService:
             "my_steam_id": 0,
             "appversion": self._pw_default_appversion,
         }
-        if not self._pw_session_file.exists():
+        if self._pw_session_provider is None:
             return data
         try:
-            raw = json.loads(self._pw_session_file.read_text(encoding="utf-8"))
+            raw = self._pw_session_provider()
             token = str(raw.get("token") or "").strip()
-            sid = raw.get("steam_id")
+            sid = raw.get("my_steam_id")
             if token:
                 data["token"] = token
             if sid is not None:
                 data["my_steam_id"] = int(sid)
+            appversion = str(raw.get("appversion") or "").strip()
+            if appversion:
+                data["appversion"] = appversion
         except Exception:
             pass
         return data

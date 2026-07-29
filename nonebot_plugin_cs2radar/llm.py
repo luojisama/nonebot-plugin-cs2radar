@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -30,12 +31,12 @@ class LLMEvaluator:
     ) -> None:
         self.enabled = enabled
         self.api_type = (api_type or "openai").strip().lower()
-        self.api_url = api_url.rstrip("/")
+        self.api_url = self._validate_api_url(api_url)
         self.api_key = api_key.strip()
         self.model = model
         self.backup_enabled = backup_enabled
         self.backup_api_type = (backup_api_type or "openai").strip().lower()
-        self.backup_api_url = backup_api_url.rstrip("/")
+        self.backup_api_url = self._validate_api_url(backup_api_url)
         self.backup_api_key = backup_api_key.strip()
         self.backup_model = backup_model
         self.timeout = timeout
@@ -181,6 +182,19 @@ class LLMEvaluator:
         content = data.get("content", [])
         texts = [str(x.get("text", "")) for x in content if isinstance(x, dict)]
         return "\n".join([x for x in texts if x]).strip()
+
+    @staticmethod
+    def _validate_api_url(api_url: str) -> str:
+        normalized = str(api_url or "").strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if (
+            parsed.scheme.lower() != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise ValueError("LLM API URL must be an HTTPS URL without embedded credentials")
+        return normalized
 
     @staticmethod
     def _normalize_api_type(api_type: str, api_url: str) -> str:

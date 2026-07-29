@@ -1,15 +1,28 @@
-from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from nonebot import require
 
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import html_to_pic
 
+from .security import inject_csp, safe_image_url
+
 TEMPLATE_PATH = Path(__file__).parent / "templates"
-env = Environment(loader=FileSystemLoader(TEMPLATE_PATH))
+env = Environment(
+    loader=FileSystemLoader(TEMPLATE_PATH),
+    autoescape=select_autoescape(enabled_extensions=("html", "xml"), default_for_string=True),
+)
+env.filters["safe_image_url"] = safe_image_url
+
+
+async def _secure_html_to_pic(html: str, *, width: int) -> bytes:
+    return await html_to_pic(
+        html=inject_csp(html),
+        viewport={"width": width, "height": 10},
+    )
 
 
 def _nested_value(source: Any, path: str) -> Any:
@@ -71,7 +84,7 @@ def _build_highlight_summary(*sources: Any) -> dict[str, Any]:
     }
 
 
-async def render_events_card(events: List[Dict[str, Any]]) -> bytes:
+async def render_events_card(events: list[dict[str, Any]]) -> bytes:
     template = env.get_template("events.html")
     processed_events = []
     for event in events:
@@ -99,27 +112,27 @@ async def render_events_card(events: List[Dict[str, Any]]) -> bytes:
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 800, "height": 10})
+    return await _secure_html_to_pic(html_content, width=800)
 
 
-async def render_matches_card(matches: List[Dict[str, Any]]) -> bytes:
+async def render_matches_card(matches: list[dict[str, Any]]) -> bytes:
     template = env.get_template("matches.html")
     html_content = template.render(
         matches=matches[:15],
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 800, "height": 10})
+    return await _secure_html_to_pic(html_content, width=800)
 
 
-async def render_results_card(results: List[Dict[str, Any]]) -> bytes:
+async def render_results_card(results: list[dict[str, Any]]) -> bytes:
     template = env.get_template("match_results.html")
     html_content = template.render(
         results=results[:20],
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 800, "height": 10})
+    return await _secure_html_to_pic(html_content, width=800)
 
 
 async def render_stats_card(data: dict) -> bytes:
@@ -134,7 +147,7 @@ async def render_stats_card(data: dict) -> bytes:
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 640, "height": 10})
+    return await _secure_html_to_pic(html_content, width=640)
 
 
 async def render_player_detail(player_data: dict) -> bytes:
@@ -148,7 +161,7 @@ async def render_player_detail(player_data: dict) -> bytes:
         hltv_link=hltv_link,
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
-    return await html_to_pic(html=html_content, viewport={"width": 800, "height": 10})
+    return await _secure_html_to_pic(html_content, width=800)
 
 
 async def render_pw_stats_card(player_data: dict) -> bytes:
@@ -160,7 +173,7 @@ async def render_pw_stats_card(player_data: dict) -> bytes:
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 640, "height": 10})
+    return await _secure_html_to_pic(html_content, width=640)
 
 
 async def render_match_detail_card(view_data: dict) -> bytes:
@@ -170,4 +183,4 @@ async def render_match_detail_card(view_data: dict) -> bytes:
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 960, "height": 10})
+    return await _secure_html_to_pic(html_content, width=960)

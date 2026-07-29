@@ -1,11 +1,14 @@
 import re
 from datetime import datetime
+from functools import wraps
+from typing import Any
 
 import httpx
-from nonebot import get_driver, get_plugin_config, logger, on_command, require
+from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.exception import FinishedException, MatcherException
 from nonebot.params import CommandArg
+from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 
 require("nonebot_plugin_htmlrender")
@@ -13,24 +16,24 @@ require("nonebot_plugin_localstore")
 
 from .binding_store import BindingStore
 from .config import Config
-from .crawler import FiveEEventCrawler, FiveECrawler, PWCrawler
+from .crawler import FiveECrawler, FiveEEventCrawler, PWCrawler
 from .llm import LLMEvaluator
 from .match_service import MatchService, parse_bind_args, parse_match_args
 from .renderer import (
     render_events_card,
     render_match_detail_card,
+    render_matches_card,
     render_player_detail,
     render_pw_stats_card,
     render_results_card,
-    render_matches_card,
     render_stats_card,
 )
+from .security import CommandGuard, GuardRejected
 from .storage import get_bind_db_path
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 plugin_config = get_plugin_config(Config)
-driver_config = get_driver().config
 
 for legacy_name in (
     "cs_pro_priority",
@@ -50,7 +53,11 @@ for legacy_name in (
     "cs_pro_llm_system_prompt",
 ):
     if getattr(plugin_config, legacy_name, None) is not None:
-        logger.warning(f"[nonebot_plugin_cs2radar] `{legacy_name}` is deprecated; migrate to `cs2radar_*` config names.")
+        status = "enabled by explicit opt-in" if plugin_config.cs2radar_allow_legacy_config else "ignored by default"
+        logger.warning(
+            f"[nonebot_plugin_cs2radar] `{legacy_name}` is deprecated and {status}; "
+            "migrate to `cs2radar_*` config names."
+        )
 
 __plugin_meta__ = PluginMetadata(
     name="CS2 Radar",
@@ -82,13 +89,33 @@ game_search = on_command("cs赛事", aliases={"赛事", "csgo赛事", "cs2赛事
 result_search = on_command("赛果", aliases={"cs赛果", "赛事赛果"}, priority=plugin_config.priority, block=True)
 five_e_stats = on_command("5e", aliases={"5e战绩", "5e查询", "cs战绩"}, priority=plugin_config.priority, block=True)
 pw_stats = on_command("pw", aliases={"pw战绩", "pw查询", "完美战绩"}, priority=plugin_config.priority, block=True)
-pw_login = on_command("pwlogin", aliases={"完美登录"}, priority=plugin_config.priority, block=True)
+pw_login = on_command(
+    "pwlogin",
+    aliases={"完美登录"},
+    priority=plugin_config.priority,
+    block=True,
+    permission=SUPERUSER,
+)
 bind_cmd = on_command("bind", aliases={"绑定", "添加", "绑定用户", "添加用户"}, priority=plugin_config.priority, block=True)
 match_cmd = on_command("match", aliases={"战绩", "查询战绩"}, priority=plugin_config.priority, block=True)
 
 # Shared services
 store = BindingStore(str(get_bind_db_path(plugin_config.bind_db_path)))
-match_service = MatchService(timeout=plugin_config.http_timeout)
+event_crawler = FiveEEventCrawler()
+five_e_crawler = FiveECrawler()
+pw_crawler = PWCrawler(
+    token=plugin_config.cs2radar_pw_token or "",
+    steam_id=plugin_config.cs2radar_pw_steam_id or 0,
+    persist_session=plugin_config.cs2radar_pw_session_persist,
+)
+match_service = MatchService(
+    timeout=plugin_config.http_timeout,
+    pw_session_provider=pw_crawler.get_session,
+)
+command_guard = CommandGuard(
+    max_concurrency=plugin_config.cs2radar_max_concurrency,
+    cooldown_seconds=plugin_config.cs2radar_cooldown_seconds,
+)
 _llm_api_key = (plugin_config.llm_api_key or "").strip()
 _llm_api_type = plugin_config.llm_api_type
 _llm_api_url = plugin_config.llm_api_url
@@ -98,11 +125,6 @@ _llm_backup_api_key = (plugin_config.llm_backup_api_key or "").strip()
 _llm_backup_api_type = plugin_config.llm_backup_api_type
 _llm_backup_api_url = plugin_config.llm_backup_api_url
 _llm_backup_model = plugin_config.llm_backup_model
-if not _llm_api_key:
-    _llm_api_key = str(getattr(driver_config, "personification_api_key", "") or "").strip()
-    _llm_api_type = str(getattr(driver_config, "personification_api_type", "openai") or "openai")
-    _llm_api_url = str(getattr(driver_config, "personification_api_url", "https://api.openai.com/v1") or "https://api.openai.com/v1")
-    _llm_model = str(getattr(driver_config, "personification_model", "gpt-4o-mini") or "gpt-4o-mini")
 llm = LLMEvaluator(
     enabled=plugin_config.llm_enabled,
     api_type=_llm_api_type,
@@ -118,10 +140,27 @@ llm = LLMEvaluator(
     system_prompt=plugin_config.llm_system_prompt,
 )
 
-# Shared crawler instances
-event_crawler = FiveEEventCrawler()
-five_e_crawler = FiveECrawler()
-pw_crawler = PWCrawler()
+
+def _guarded(matcher: Any, command_name: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            event = kwargs.get("event")
+            if event is None:
+                event = next((item for item in args if isinstance(item, MessageEvent)), None)
+            if event is None:
+                logger.error(f"[nonebot_plugin_cs2radar] missing MessageEvent for guarded command {command_name}")
+                await matcher.finish("命令上下文异常，请联系管理员。")
+                return None
+            try:
+                async with command_guard.acquire(str(event.user_id), command_name):
+                    return await func(*args, **kwargs)
+            except GuardRejected as exc:
+                await matcher.finish(str(exc))
+
+        return wrapper
+
+    return decorator
 
 
 def _extract_target_qq(bot: Bot, event: MessageEvent) -> str:
@@ -239,10 +278,13 @@ def _build_match_view_data(match_data, llm_title: str, llm_detail: str) -> dict:
 
 
 @bind_cmd.handle()
+@_guarded(bind_cmd, "bind")
 async def handle_bind(event: MessageEvent, args: Message = CommandArg()):
     raw = args.extract_plain_text().strip()
     if not raw:
         await bind_cmd.finish("用法: /bind [5e|pw] [玩家名]")
+    if len(raw) > 128:
+        await bind_cmd.finish("绑定参数过长。")
 
     try:
         default_platform = store.get_default_platform(str(event.user_id))
@@ -266,7 +308,8 @@ async def handle_bind(event: MessageEvent, args: Message = CommandArg()):
         else:
             bound = await match_service.bind_player(store, str(event.user_id), platform, name)
     except Exception as e:
-        await bind_cmd.finish(f"绑定失败: {e}")
+        logger.exception(f"[nonebot_plugin_cs2radar] bind failed: {e}")
+        await bind_cmd.finish("绑定失败，请稍后重试。")
 
     if bound.platform == "pw" and (not bound.domain or not bound.uuid):
         await bind_cmd.finish(
@@ -279,16 +322,22 @@ async def handle_bind(event: MessageEvent, args: Message = CommandArg()):
 
 
 @match_cmd.handle()
+@_guarded(match_cmd, "match")
 async def handle_match(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
     raw = args.extract_plain_text().strip()
+    if len(raw) > 128:
+        await match_cmd.finish("查询参数过长。")
     platform, round_index = parse_match_args(raw)
     target_qq = _extract_target_qq(bot, event)
+    if target_qq != str(event.user_id) and not plugin_config.cs2radar_allow_query_others:
+        await match_cmd.finish("出于隐私保护，当前不允许查询其他群成员的绑定战绩。")
 
     await match_cmd.send("正在查询详细战绩并生成评价...")
     try:
         match_data = await match_service.fetch_match(store, target_qq, platform, round_index)
     except Exception as e:
-        await match_cmd.finish(f"查询失败: {e}")
+        logger.exception(f"[nonebot_plugin_cs2radar] match query failed: {e}")
+        await match_cmd.finish("查询失败，请稍后重试。")
 
     llm_title = "评价暂不可用"
     llm_detail = "未配置或调用失败，本次仅展示战绩数据。"
@@ -306,21 +355,27 @@ async def handle_match(bot: Bot, event: MessageEvent, args: Message = CommandArg
 
 
 @cs_search.handle()
-async def handle_cs_search(args: Message = CommandArg()):
+@_guarded(cs_search, "cs_search")
+async def handle_cs_search(event: MessageEvent, args: Message = CommandArg()):
     query = args.extract_plain_text().strip()
     if not query:
         await cs_search.finish("请输入选手名称，例如: cs查询 sh1ro")
+    if len(query) > 64:
+        await cs_search.finish("选手名称过长。")
 
     search_api = "https://api.viki.moe/pw-cs/search"
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=plugin_config.http_timeout) as client:
         try:
             resp = await client.get(search_api, params={"type": "player", "s": query})
+            resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            await cs_search.finish(f"查询出错: {e}")
+            logger.exception(f"[nonebot_plugin_cs2radar] player search failed: {e}")
+            await cs_search.finish("查询出错，请稍后重试。")
 
     if not isinstance(data, list):
-        await cs_search.finish(f"查询出错: {data.get('message') if isinstance(data, dict) else '未知错误'}")
+        logger.warning(f"[nonebot_plugin_cs2radar] unexpected player search response: {type(data).__name__}")
+        await cs_search.finish("查询出错，请稍后重试。")
     if not data:
         await cs_search.finish("未找到相关选手，请检查名称")
 
@@ -330,12 +385,14 @@ async def handle_cs_search(args: Message = CommandArg()):
         await cs_search.finish("未找到选手HLTV ID")
 
     detail_api = f"https://api.viki.moe/pw-cs/player/{hltv_id}"
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=plugin_config.http_timeout) as client:
         try:
             resp = await client.get(detail_api)
+            resp.raise_for_status()
             player = resp.json()
         except Exception as e:
-            await cs_search.finish(f"获取选手详情出错: {e}")
+            logger.exception(f"[nonebot_plugin_cs2radar] player detail failed: {e}")
+            await cs_search.finish("获取选手详情出错，请稍后重试。")
 
     try:
         image_bytes = await render_player_detail(player)
@@ -349,7 +406,8 @@ async def handle_cs_search(args: Message = CommandArg()):
 
 
 @game_search.handle()
-async def handle_game_search():
+@_guarded(game_search, "events")
+async def handle_game_search(event: MessageEvent):
     await game_search.send("正在获取实时赛程与赛事信息...")
     try:
         matches = await event_crawler.get_matches()
@@ -367,11 +425,12 @@ async def handle_game_search():
         raise
     except Exception as e:
         logger.error(f"Error in game_search: {e}")
-        await game_search.finish(f"查询赛事失败: {e}")
+        await game_search.finish("查询赛事失败，请稍后重试。")
 
 
 @result_search.handle()
-async def handle_result_search():
+@_guarded(result_search, "results")
+async def handle_result_search(event: MessageEvent):
     await result_search.send("正在获取赛果数据...")
     try:
         results = await event_crawler.get_results()
@@ -383,14 +442,17 @@ async def handle_result_search():
         raise
     except Exception as e:
         logger.error(f"Error in result_search: {e}")
-        await result_search.finish(f"查询赛果失败: {e}")
+        await result_search.finish("查询赛果失败，请稍后重试。")
 
 
 @five_e_stats.handle()
-async def handle_five_e_stats(arg: Message = CommandArg()):
+@_guarded(five_e_stats, "five_e")
+async def handle_five_e_stats(event: MessageEvent, arg: Message = CommandArg()):
     input_str = arg.extract_plain_text().strip()
     if not input_str:
         await five_e_stats.finish("请输入5E玩家域名、ID或昵称，例如: /5e 15429443s91f72")
+    if len(input_str) > 64:
+        await five_e_stats.finish("玩家标识过长。")
 
     await five_e_stats.send(f"正在查询 5E 玩家 {input_str}...")
     domain = input_str
@@ -421,16 +483,23 @@ async def handle_five_e_stats(arg: Message = CommandArg()):
         raise
     except Exception as e:
         logger.error(f"Error in five_e_stats: {e}")
-        await five_e_stats.finish(f"5E 查询失败: {str(e)}")
+        await five_e_stats.finish("5E 查询失败，请稍后重试。")
 
 
 @pw_login.handle()
-async def handle_pw_login(arg: Message = CommandArg()):
+@_guarded(pw_login, "pw_login")
+async def handle_pw_login(event: MessageEvent, arg: Message = CommandArg()):
+    if not plugin_config.cs2radar_pw_login_enabled:
+        await pw_login.finish("QQ 内登录默认关闭。请优先通过服务器环境变量配置完美平台 Session。")
+    if getattr(event, "message_type", "") != "private":
+        await pw_login.finish("安全原因，完美平台登录仅允许超级用户在私聊中执行。")
     args = arg.extract_plain_text().strip().split()
     if len(args) != 2:
         await pw_login.finish("请输入手机号和验证码，例如: /pwlogin 13800138000 123456")
 
     mobile, code = args
+    if not re.fullmatch(r"1\d{10}", mobile) or not re.fullmatch(r"\d{4,8}", code):
+        await pw_login.finish("手机号或验证码格式不正确。")
     await pw_login.send("正在尝试登录完美平台...")
 
     result = await pw_crawler.login(mobile, code)
@@ -442,10 +511,13 @@ async def handle_pw_login(arg: Message = CommandArg()):
 
 
 @pw_stats.handle()
-async def handle_pw_stats(arg: Message = CommandArg()):
+@_guarded(pw_stats, "pw_stats")
+async def handle_pw_stats(event: MessageEvent, arg: Message = CommandArg()):
     input_str = arg.extract_plain_text().strip()
     if not input_str:
         await pw_stats.finish("请输入完美平台玩家昵称或 SteamId，例如: /pw sh1ro")
+    if len(input_str) > 64:
+        await pw_stats.finish("玩家标识过长。")
     if not pw_crawler.has_session():
         await pw_stats.finish("请先使用 /pwlogin <手机号> <验证码> 登录完美平台后再查询。")
 
@@ -466,7 +538,8 @@ async def handle_pw_stats(arg: Message = CommandArg()):
 
         data = await pw_crawler.get_player_data(target_steam_id)
         if "error" in data:
-            await pw_stats.finish(f"查询完美战绩失败: {data['error']}")
+            logger.warning(f"[nonebot_plugin_cs2radar] PW API returned an error: {data['error']}")
+            await pw_stats.finish("查询完美战绩失败，请稍后重试。")
         if not data or not data.get("stats"):
             await pw_stats.finish(f"未找到玩家 {target_steam_id} 的有效战绩数据。")
 
@@ -481,5 +554,5 @@ async def handle_pw_stats(arg: Message = CommandArg()):
         raise
     except Exception as e:
         logger.error(f"Error in pw_stats: {e}")
-        await pw_stats.finish(f"完美战绩查询失败: {str(e)}")
+        await pw_stats.finish("完美战绩查询失败，请稍后重试。")
 

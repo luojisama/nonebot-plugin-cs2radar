@@ -300,12 +300,12 @@
     <div class="container">
         <!-- Header -->
         <div class="player-header">
-            <img src="{{ player.logo or 'https://static.5eplay.com/images/common/player_default.png' }}" class="player-portrait" onerror="this.src='https://static.5eplay.com/images/common/player_default.png'">
+            <img src="{{ (player.logo or 'https://static.5eplay.com/images/common/player_default.png') | safe_image_url('https://static.5eplay.com/images/common/player_default.png') }}" class="player-portrait">
             <div class="player-info">
                 <div class="player-name-row">
                     <h1 class="player-name">{{ player.name }}</h1>
                     <div class="team-tag">
-                        <img src="{{ player.team.logo }}" class="team-logo" onerror="this.style.display='none'">
+                        <img src="{{ player.team.logo | safe_image_url }}" class="team-logo">
                         <span>{{ player.team.name }}</span>
                     </div>
                 </div>
@@ -344,7 +344,7 @@
                     {% if player.prosets %}
                         {% for item in player.prosets %}
                         <div class="peri-item">
-                            <img src="{{ item.logo }}" class="peri-icon" onerror="this.src='https://static.5eplay.com/images/common/device_default.png'">
+                            <img src="{{ item.logo | safe_image_url('https://static.5eplay.com/images/common/device_default.png') }}" class="peri-icon">
                             <div class="peri-info">
                                 <span class="peri-type">{{ item.type_desc }}</span>
                                 <span class="peri-name">{{ item.name }}</span>
@@ -369,7 +369,7 @@
                     {% if player.honor_list %}
                         {% for honor in player.honor_list[:5] %}
                         <div class="honor-item">
-                            <img src="{{ honor.logo }}" class="honor-logo" onerror="this.src='https://static.5eplay.com/images/common/honor_default.png'">
+                            <img src="{{ honor.logo | safe_image_url('https://static.5eplay.com/images/common/honor_default.png') }}" class="honor-logo">
                             <div class="honor-info">
                                 <span class="honor-name">{{ honor.name }}</span>
                                 <div class="honor-meta">
@@ -396,7 +396,7 @@
                     {% if player.event_list %}
                         {% for event in player.event_list[:5] %}
                         <div class="honor-item" style="border-left-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.02);">
-                            <img src="{{ event.logo }}" class="honor-logo" onerror="this.src='https://static.5eplay.com/images/common/event_default.png'">
+                            <img src="{{ event.logo | safe_image_url('https://static.5eplay.com/images/common/event_default.png') }}" class="honor-logo">
                             <div class="honor-info">
                                 <span class="honor-name">{{ event.name }}</span>
                                 <span class="honor-date">{{ event.date }}</span>

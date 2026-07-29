@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .security import ensure_private_file
 from .storage import LEGACY_DATA_DIRS
 
 
@@ -26,7 +27,9 @@ class BindingStore:
         self._lock = threading.RLock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+        ensure_private_file(self.db_path)
         self._migrate_legacy_once()
+        ensure_private_file(self.db_path)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)

@@ -263,7 +263,7 @@
                 <div class="match-teams">
                     <div class="team team-left">
                         <span class="team-name">{{ match.team1.name }}</span>
-                        <img src="{{ match.team1.logo }}" class="team-logo" onerror="this.src='https://static.5eplay.com/images/common/team_default.png'">
+                        <img src="{{ match.team1.logo | safe_image_url('https://static.5eplay.com/images/common/team_default.png') }}" class="team-logo">
                     </div>
                     
                     <div class="match-score">
@@ -273,7 +273,7 @@
                     </div>
                     
                     <div class="team team-right">
-                        <img src="{{ match.team2.logo }}" class="team-logo" onerror="this.src='https://static.5eplay.com/images/common/team_default.png'">
+                        <img src="{{ match.team2.logo | safe_image_url('https://static.5eplay.com/images/common/team_default.png') }}" class="team-logo">
                         <span class="team-name">{{ match.team2.name }}</span>
                     </div>
                 </div>

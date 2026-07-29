@@ -18,6 +18,14 @@ class Config(BaseModel):
     cs2radar_llm_backup_model: str | None = Field(default=None)
     cs2radar_llm_timeout: int | None = Field(default=None, ge=5, le=120)
     cs2radar_llm_system_prompt: str | None = Field(default=None)
+    cs2radar_pw_login_enabled: bool = Field(default=False)
+    cs2radar_pw_session_persist: bool = Field(default=False)
+    cs2radar_pw_token: str | None = Field(default=None, repr=False)
+    cs2radar_pw_steam_id: int | None = Field(default=None, ge=1)
+    cs2radar_max_concurrency: int = Field(default=2, ge=1, le=8)
+    cs2radar_cooldown_seconds: int = Field(default=10, ge=0, le=300)
+    cs2radar_allow_query_others: bool = Field(default=False)
+    cs2radar_allow_legacy_config: bool = Field(default=False)
 
     cs_pro_priority: int | None = Field(default=None, ge=1, le=20)
     cs_pro_bind_db_path: str | None = Field(default=None)
@@ -35,11 +43,10 @@ class Config(BaseModel):
     cs_pro_llm_timeout: int | None = Field(default=None, ge=5, le=120)
     cs_pro_llm_system_prompt: str | None = Field(default=None)
 
-    @staticmethod
-    def _pick(new_value, old_value, default):
+    def _pick(self, new_value, old_value, default):
         if new_value is not None:
             return new_value
-        if old_value is not None:
+        if self.cs2radar_allow_legacy_config and old_value is not None:
             return old_value
         return default
 
@@ -57,7 +64,7 @@ class Config(BaseModel):
 
     @property
     def llm_enabled(self) -> bool:
-        return bool(self._pick(self.cs2radar_llm_enabled, self.cs_pro_llm_enabled, True))
+        return bool(self._pick(self.cs2radar_llm_enabled, self.cs_pro_llm_enabled, False))
 
     @property
     def llm_api_type(self) -> str:

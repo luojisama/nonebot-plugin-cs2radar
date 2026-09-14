@@ -1,7 +1,9 @@
+import base64
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any
 
+import httpx
 from jinja2 import Environment, FileSystemLoader
 from nonebot import require
 
@@ -10,6 +12,39 @@ from nonebot_plugin_htmlrender import html_to_pic
 
 TEMPLATE_PATH = Path(__file__).parent / "templates"
 env = Environment(loader=FileSystemLoader(TEMPLATE_PATH))
+
+
+async def _ensure_avatar_data_uri(player_data: dict) -> None:
+    summary = player_data.get("summary")
+    if isinstance(summary, dict) and summary.get("avatar_data_uri"):
+        return
+    if player_data.get("avatar_data_uri"):
+        return
+
+    url = None
+    if isinstance(summary, dict):
+        url = summary.get("avatarUrl") or summary.get("avatar")
+    if not url:
+        url = player_data.get("avatar") or player_data.get("avatar_url")
+
+    if url and isinstance(url, str) and url.startswith("http"):
+        try:
+            async with httpx.AsyncClient(timeout=3.5, follow_redirects=True) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    ct = resp.headers.get("content-type", "image/png").split(";")[0].strip()
+                    b64 = base64.b64encode(resp.content).decode("ascii")
+                    uri = f"data:{ct};base64,{b64}"
+                    player_data["avatar_data_uri"] = uri
+                    player_data["avatar"] = uri
+                    if isinstance(summary, dict):
+                        summary["avatar_data_uri"] = uri
+                    return
+        except Exception:
+            pass
+    if isinstance(summary, dict):
+        summary["avatar_data_uri"] = ""
+    player_data["avatar_data_uri"] = ""
 
 
 def _nested_value(source: Any, path: str) -> Any:
@@ -123,18 +158,22 @@ async def render_results_card(results: List[Dict[str, Any]]) -> bytes:
 
 
 async def render_stats_card(data: dict) -> bytes:
+    await _ensure_avatar_data_uri(data)
     template = env.get_template("stats.html")
     stats = data.get("stats", {})
-    combat = _build_highlight_summary(stats, stats.get("career", {}), stats.get("best_season", {}), stats.get("home", {}))
+    combat = data.get("combat") or _build_highlight_summary(stats, stats.get("career", {}), stats.get("best_season", {}), stats.get("home", {}))
     html_content = template.render(
         nickname=data.get("nickname", "Unknown"),
-        avatar=data.get("avatar", ""),
+        avatar=data.get("avatar_data_uri") or data.get("avatar", ""),
         stats=stats,
         combat=combat,
+        llm_title=data.get("llm_title"),
+        llm_detail=data.get("llm_detail"),
+        llm_sections=data.get("llm_sections", []),
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 640, "height": 10})
+    return await html_to_pic(html=html_content, viewport={"width": 960, "height": 10})
 
 
 async def render_player_detail(player_data: dict) -> bytes:
@@ -152,15 +191,19 @@ async def render_player_detail(player_data: dict) -> bytes:
 
 
 async def render_pw_stats_card(player_data: dict) -> bytes:
+    await _ensure_avatar_data_uri(player_data)
     template = env.get_template("pw_stats.html")
-    combat = _build_highlight_summary(player_data.get("stats", {}))
+    combat = player_data.get("combat") or _build_highlight_summary(player_data.get("stats", {}))
     html_content = template.render(
         player=player_data,
         combat=combat,
+        llm_title=player_data.get("llm_title"),
+        llm_detail=player_data.get("llm_detail"),
+        llm_sections=player_data.get("llm_sections", []),
         now=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
-    return await html_to_pic(html=html_content, viewport={"width": 640, "height": 10})
+    return await html_to_pic(html=html_content, viewport={"width": 960, "height": 10})
 
 
 async def render_match_detail_card(view_data: dict) -> bytes:

@@ -2,325 +2,765 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>CS Match Detail</title>
+  <title>CS2 Match Detail</title>
   <style>
     :root {
-      --bg: #0b0e14;
-      --card: #141921;
-      --text: #e8edf5;
-      --muted: #98a3b3;
-      --line: rgba(255, 255, 255, 0.08);
-      --good: #56f090;
-      --bad: #ff5f73;
-      --draw: #ffd166;
+      --bg-base: #0a0d14;
+      --bg-card: rgba(16, 22, 34, 0.75);
+      --bg-card-hover: rgba(22, 30, 46, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.3);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --color-win: #10b981;
+      --color-win-glow: rgba(16, 185, 129, 0.25);
+      --color-loss: #f43f5e;
+      --color-loss-glow: rgba(244, 63, 94, 0.25);
+      --color-draw: #f59e0b;
+      --color-draw-glow: rgba(245, 158, 11, 0.25);
+
+      --color-rating-hero: #fbbf24;
+      --color-pw: #00b4d8;
+      --color-5e: #ff6b00;
     }
-    * { box-sizing: border-box; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0;
       width: 960px;
-      padding: 22px;
-      background: radial-gradient(1200px 300px at 30% 0%, rgba(255,255,255,.06), transparent), var(--bg);
-      color: var(--text);
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .board {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 18px;
+
+    .container {
+      background: radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.12), transparent 70%),
+                  radial-gradient(circle at 90% 40%, rgba(139, 92, 246, 0.08), transparent 60%),
+                  #0f141f;
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     }
-    .top {
-      padding: 18px 22px;
-      border-bottom: 1px solid var(--line);
-      background: linear-gradient(90deg, {{ data.theme_a }}, {{ data.theme_b }});
+
+    /* 顶部导航与对局总览 */
+    .header {
+      padding: 24px 28px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+      position: relative;
     }
-    .title { font-size: 28px; font-weight: 900; letter-spacing: .5px; }
-    .sub { margin-top: 6px; color: rgba(255,255,255,.92); font-size: 14px; }
-    .top-score {
-      margin-top: 14px;
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      border-radius: 999px;
-      background: rgba(0,0,0,.18);
-      font-weight: 900;
-    }
-    .top-score .score { font-size: 28px; }
-    .top-score .tag { font-size: 12px; text-transform: uppercase; opacity: .88; }
-    .grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 14px;
-      padding: 16px;
-    }
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 14px;
-      background: rgba(255,255,255,.02);
-    }
-    .panel h3 {
-      margin: 0 0 10px;
-      font-size: 14px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .meta {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
-      gap: 8px 14px;
-      font-size: 14px;
-    }
-    .meta b { color: var(--muted); font-weight: 600; margin-right: 6px; }
-    .hero {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: 8px;
-    }
-    .kpi, .chip {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 8px;
-      text-align: center;
-      background: rgba(255,255,255,.01);
-    }
-    .k { font-size: 11px; color: var(--muted); }
-    .v { margin-top: 6px; font-size: 20px; font-weight: 900; }
-    .highlight-wrap {
-      padding: 0 16px 16px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-    .highlight-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0,1fr));
-      gap: 8px;
-    }
-    .clutch-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0,1fr));
-      gap: 8px;
-    }
-    .rounds { padding: 0 16px 16px; }
-    .round-list {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-    .segment {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 12px;
-      background: rgba(255,255,255,.02);
-    }
-    .segment-head {
+
+    .header-top {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      gap: 8px;
-      margin-bottom: 10px;
+      align-items: center;
+      margin-bottom: 16px;
     }
-    .segment-title { font-size: 16px; font-weight: 800; }
-    .segment-score { font-size: 20px; font-weight: 900; }
-    .round-grid {
+
+    .platform-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      background: rgba(0, 180, 216, 0.12);
+      border: 1px solid rgba(0, 180, 216, 0.35);
+      font-size: 13px;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: 0.5px;
+    }
+    .platform-badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #38bdf8;
+      box-shadow: 0 0 8px #38bdf8;
+    }
+
+    .match-meta-tags {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .match-meta-tags span {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* 比分指示区 */
+    .scoreboard {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 16px 24px;
+      margin-top: 4px;
+    }
+
+    .team-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 220px;
+    }
+    .team-block.right { text-align: right; }
+    .team-tag {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+    .team-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .team-block.left .team-title { color: #60a5fa; }
+    .team-block.right .team-title { color: #f87171; }
+
+    .score-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .score-digits {
+      font-size: 42px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .score-digits .colon {
+      color: var(--text-muted);
+      font-size: 32px;
+      margin-top: -4px;
+    }
+
+    .result-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .result-badge.good {
+      background: var(--color-win-glow);
+      border: 1px solid var(--color-win);
+      color: #34d399;
+    }
+    .result-badge.bad {
+      background: var(--color-loss-glow);
+      border: 1px solid var(--color-loss);
+      color: #fb7185;
+    }
+    .result-badge.draw {
+      background: var(--color-draw-glow);
+      border: 1px solid var(--color-draw);
+      color: #fbbf24;
+    }
+
+    .sub-timeline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .sub-pill {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .sub-pill b { color: var(--text-primary); margin-left: 4px; }
+
+    /* 主要内容网格 */
+    .content-grid {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 16px 20px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 个人高光核心卡片 */
+    .hero-stats-row {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 8px;
+      grid-template-columns: 1.4fr repeat(5, 1fr);
+      gap: 10px;
     }
-    .round-box {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px 6px;
+
+    .kpi-box {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 10px;
       text-align: center;
-      background: rgba(255,255,255,.02);
-      min-height: 72px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
     }
-    .round-box.win { background: rgba(86, 240, 144, .10); }
-    .round-box.loss { background: rgba(255, 95, 115, .10); }
-    .round-box.unknown { background: rgba(255, 209, 102, .10); }
-    .round-no { font-size: 11px; color: var(--muted); }
-    .round-res { margin-top: 4px; font-size: 22px; font-weight: 900; }
-    .round-side, .round-score-after { margin-top: 3px; font-size: 11px; color: var(--muted); }
-    .tables {
+    .kpi-box.rating-hero {
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(0, 0, 0, 0.2));
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      box-shadow: inset 0 0 15px rgba(251, 191, 36, 0.08);
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .kpi-val {
+      font-size: 22px;
+      font-weight: 900;
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+    .kpi-box.rating-hero .kpi-val {
+      font-size: 28px;
+      color: #fbbf24;
+      text-shadow: 0 0 12px rgba(251, 191, 36, 0.3);
+    }
+    .kpi-tag {
+      font-size: 10px;
+      font-weight: 800;
+      color: #34d399;
+      background: rgba(52, 211, 153, 0.15);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-top: 4px;
+      align-self: center;
+    }
+
+    /* 高光与残局组合 */
+    .highlights-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .hl-chip {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .hl-chip .label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .hl-chip .num { font-size: 18px; font-weight: 900; color: #38bdf8; font-variant-numeric: tabular-nums; }
+
+    /* 逐回合明细网格 (若有) */
+    .rounds-wrapper { margin-top: 4px; }
+    .round-track {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .half-seg {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .seg-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+    .round-cells {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+    }
+    .rcell {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 6px 4px;
+      text-align: center;
+    }
+    .rcell.win { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
+    .rcell.loss { background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.3); color: #fb7185; }
+    .rcell .rno { font-size: 10px; color: var(--text-muted); }
+    .rcell .res { font-size: 14px; font-weight: 900; margin-top: 2px; }
+
+    /* 数据榜单双栏 */
+    .leaderboard-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 14px;
-      padding: 0 16px 16px;
     }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    thead th {
-      color: var(--muted);
+    .match-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .match-table th {
       text-align: left;
+      color: var(--text-muted);
+      font-size: 11px;
       font-weight: 700;
-      border-bottom: 1px solid var(--line);
-      padding: 8px 4px;
+      text-transform: uppercase;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--border-subtle);
     }
-    tbody td {
-      border-bottom: 1px dashed rgba(255,255,255,.06);
-      padding: 7px 4px;
+    .match-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      color: var(--text-secondary);
     }
-    tbody tr:last-child td { border-bottom: 0; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
-    tr.self-row td {
-      background: rgba(255,255,255,.06);
+    .match-table tr:last-child td { border-bottom: 0; }
+    .match-table .pname {
       font-weight: 700;
+      color: var(--text-primary);
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .llm {
-      margin: 0 16px 0;
-      border: 1px solid var(--line);
-      border-radius: 14px 14px 0 0;
-      padding: 14px;
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
-      border-bottom: 0;
+    .match-table tr.is-self {
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.12), transparent);
     }
-    .llm h3 { margin: 0; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
-    .llm .style {
-      margin-top: 10px;
-      font-size: 36px;
-      font-weight: 900;
-      letter-spacing: 1px;
+    .match-table tr.is-self td {
       color: #fff;
     }
-    .llm .detail {
-      margin-top: 10px;
+    .match-table tr.is-self .pname {
+      color: #38bdf8;
+      font-weight: 900;
+    }
+    .r-badge {
+      display: inline-block;
+      min-width: 32px;
+      text-align: right;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .r-high { color: #34d399; }
+    .r-mid { color: #f8fafc; }
+    .r-low { color: #fb7185; }
+    .td-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* LLM 战术深度复盘卡片 */
+    .llm-section {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: 16px;
+      padding: 20px 24px;
+      position: relative;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+    .llm-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .llm-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #818cf8;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 4px 12px;
+      border-radius: 9999px;
+    }
+    .llm-title-text {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+
+    .llm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .llm-card {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-left: 3px solid #64748b;
+    }
+    .llm-card.sec-1 { border-left-color: #38bdf8; }
+    .llm-card.sec-2 { border-left-color: #a855f7; }
+    .llm-card.sec-3 { border-left-color: #34d399; }
+    .llm-card.sec-4 { border-left-color: #f59e0b; }
+
+    .llm-card-tag {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sec-1 .llm-card-tag { color: #38bdf8; }
+    .sec-2 .llm-card-tag { color: #c084fc; }
+    .sec-3 .llm-card-tag { color: #34d399; }
+    .sec-4 .llm-card-tag { color: #fbbf24; }
+
+    .llm-card-body {
+      font-size: 13px;
+      line-height: 1.65;
+      color: #cbd5e1;
+      text-align: justify;
+    }
+
+    .fallback-detail {
+      font-size: 13px;
       line-height: 1.7;
-      font-size: 14px;
-      color: #d6deeb;
+      color: #cbd5e1;
       white-space: pre-wrap;
     }
-    .footer {
-      color: var(--muted);
-      text-align: center;
+
+    /* 底部水印 */
+    .footer-bar {
+      padding: 14px 28px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       font-size: 11px;
-      border: 1px solid var(--line);
-      border-top: 0;
-      padding: 8px;
-      margin: 0 16px 16px;
-      background: rgba(255,255,255,.01);
-      border-radius: 0 0 14px 14px;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.2);
     }
-    .good { color: var(--good); }
-    .bad { color: var(--bad); }
-    .draw { color: var(--draw); }
   </style>
 </head>
 <body>
-  <div class="board">
-    <div class="top">
-      <div class="title">{{ data.platform_label }} 每把详细战绩</div>
-      <div class="sub">{{ data.map_name }} · {{ data.match_type }} · {{ data.start_at }} · 对局ID {{ data.match_id }}</div>
-      <div class="top-score">
-        <span class="tag">Final</span>
-        <span class="score">{{ data.score_text }}</span>
-        <span class="{{ data.result_class }}">{{ data.result_text }}</span>
-      </div>
-    </div>
-    <div class="grid">
-      <div class="panel">
-        <h3>对局信息</h3>
-        <div class="meta">
-          <div><b>结果</b><span class="{{ data.result_class }}">{{ data.result_text }}</span></div>
-          <div><b>玩家</b>{{ data.player.name }}</div>
-          <div><b>总比分</b>{{ data.score_text }}</div>
-          <div><b>时长</b>{{ data.duration_min }} 分钟</div>
-          <div><b>半场</b>{{ data.half_summary }}</div>
-          <div><b>平台标识</b>{{ data.player.uuid }}</div>
+  <div class="container">
+    <!-- 头部栏 -->
+    <div class="header">
+      <div class="header-top">
+        <div class="platform-badge">
+          <div class="dot"></div>
+          {{ data.platform_label }} 比赛详情
+        </div>
+        <div class="match-meta-tags">
+          <span>{{ data.map_name }}</span>
+          <span>{{ data.match_type }}</span>
+          <span>{{ data.duration_min }} 分钟</span>
         </div>
       </div>
-      <div class="panel">
-        <h3>个人概览</h3>
-        <div class="hero">
-          <div class="kpi"><div class="k">Rating</div><div class="v">{{ data.player.rating }}</div></div>
-          <div class="kpi"><div class="k">ADR</div><div class="v">{{ data.player.adr }}</div></div>
-          <div class="kpi"><div class="k">K / D</div><div class="v">{{ data.player.kill }}/{{ data.player.death }}</div></div>
-          <div class="kpi"><div class="k">爆头率</div><div class="v">{{ data.player.hs }}</div></div>
-          <div class="kpi"><div class="k">Elo</div><div class="v">{{ data.player.elo }}</div></div>
-          <div class="kpi"><div class="k">RWS</div><div class="v">{{ data.player.rws }}</div></div>
+
+      <!-- 比分板核心 -->
+      <div class="scoreboard">
+        <div class="team-block left">
+          <div class="team-tag">My Team / 我方阵容</div>
+          <div class="team-title">{{ data.player.name }} 战队</div>
+        </div>
+
+        <div class="score-center">
+          <div class="result-badge {{ data.result_class }}">{{ data.result_text }}</div>
+          <div class="score-digits">
+            <span>{{ data.score_text.split(':')[0] }}</span>
+            <span class="colon">:</span>
+            <span>{{ data.score_text.split(':')[1] }}</span>
+          </div>
+          <!-- 阶段小分 -->
+          <div class="sub-timeline">
+            {% for h in data.halves %}
+            <div class="sub-pill">{{ h.label }}<b>{{ h.score_text }}</b></div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="team-block right">
+          <div class="team-tag">Opponent / 敌方阵容</div>
+          <div class="team-title">对阵阵营</div>
         </div>
       </div>
     </div>
-    <div class="highlight-wrap">
-      <div class="panel">
-        <h3>高光数据</h3>
-        <div class="highlight-grid">{% for item in data.player_highlights.summary_cards %}<div class="chip"><div class="k">{{ item.label }}</div><div class="v">{{ item.value }}</div></div>{% endfor %}</div>
+
+    <!-- 主要数据网格 -->
+    <div class="content-grid">
+      <!-- 个人核心数据面板 -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>★</span> 个人战斗表现 (PLAYER PERFORMANCE)
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted);">
+            平台标识: {{ data.player.uuid }}
+          </div>
+        </div>
+
+        <div class="hero-stats-row">
+          <!-- Rating HERO 框 -->
+          <div class="kpi-box rating-hero">
+            <div class="kpi-label">Rating 2.0</div>
+            <div class="kpi-val">{{ data.player.rating }}</div>
+            {% set r_val = data.player.rating|float %}
+            {% if r_val >= 1.40 %}
+              <div class="kpi-tag" style="background: rgba(251,191,36,0.2); color: #fbbf24;">MVP · 极致CARRY</div>
+            {% elif r_val >= 1.15 %}
+              <div class="kpi-tag" style="background: rgba(52,211,153,0.2); color: #34d399;">表现出众</div>
+            {% elif r_val >= 1.00 %}
+              <div class="kpi-tag" style="background: rgba(148,163,184,0.2); color: #94a3b8;">中规中矩</div>
+            {% else %}
+              <div class="kpi-tag" style="background: rgba(244,63,94,0.2); color: #fb7185;">急需调整</div>
+            {% endif %}
+          </div>
+
+          <div class="kpi-box">
+            <div class="kpi-label">ADR 局均伤害</div>
+            <div class="kpi-val">{{ data.player.adr }}</div>
+          </div>
+
+          <div class="kpi-box">
+            <div class="kpi-label">K / D (击杀/死亡)</div>
+            <div class="kpi-val">{{ data.player.kill }}<span style="font-size: 14px; color: var(--text-muted); font-weight: 400;">/</span>{{ data.player.death }}</div>
+          </div>
+
+          <div class="kpi-box">
+            <div class="kpi-label">爆头率 HS%</div>
+            <div class="kpi-val">{{ data.player.hs }}</div>
+          </div>
+
+          <div class="kpi-box">
+            <div class="kpi-label">RWS 胜局贡献</div>
+            <div class="kpi-val">{{ data.player.rws }}</div>
+          </div>
+
+          <div class="kpi-box">
+            <div class="kpi-label">天梯积分变动</div>
+            {% set elo_val = data.player.elo|string %}
+            <div class="kpi-val" style="color: {{ '#34d399' if elo_val.startswith('+') else ('#fb7185' if elo_val.startswith('-') else '#f8fafc') }};">{{ data.player.elo }}</div>
+          </div>
+        </div>
+
+        <!-- 高光横栏 -->
+        <div class="highlights-bar" style="margin-top: 12px;">
+          <div class="hl-chip">
+            <span class="label">🎯 首杀破点</span>
+            <span class="num">{{ data.player_highlights.first_kills }}</span>
+          </div>
+          <div class="hl-chip">
+            <span class="label">💥 多杀回合</span>
+            <span class="num">{{ data.player_highlights.multi_kills }}</span>
+          </div>
+          <div class="hl-chip">
+            <span class="label">🛡️ 残局胜利</span>
+            <span class="num">{{ data.player_highlights.clutch_wins }}</span>
+          </div>
+          <div class="hl-chip">
+            <span class="label">⚔️ 2K/3K/4K/ACE</span>
+            <span class="num" style="font-size: 15px;">{{ data.player_highlights.summary_cards[3].value }}</span>
+          </div>
+        </div>
       </div>
-      <div class="panel">
-        <h3>残局拆分</h3>
-        <div class="clutch-grid">{% for item in data.player_highlights.clutch_cards %}<div class="chip"><div class="k">{{ item.label }}</div><div class="v">{{ item.value }}</div></div>{% endfor %}</div>
-      </div>
-    </div>
-    <div class="rounds">
-      <div class="panel">
-        <h3>回合走势</h3>
-        <div class="round-list">
+
+      <!-- 逐回合走向 (仅在支持逐回合明细时展示) -->
+      {% if data.has_rounds %}
+      <div class="panel-card rounds-wrapper">
+        <div class="panel-title" style="margin-bottom: 10px;">
+          <span>⚡</span> 逐回合走势明细 (ROUND PROGRESSION)
+        </div>
+        <div class="round-track">
           {% for segment in data.halves %}
-          <div class="segment">
-            <div class="segment-head"><div class="segment-title">{{ segment.label }}</div><div class="segment-score">{{ segment.score_text }}</div></div>
-            {% if segment.rounds %}
-            <div class="round-grid">
+          {% if segment.rounds %}
+          <div class="half-seg">
+            <div class="seg-title">
+              <span>{{ segment.label }}</span>
+              <span style="font-weight: 800; color: #fff;">{{ segment.score_text }}</span>
+            </div>
+            <div class="round-cells">
               {% for round in segment.rounds %}
-              <div class="round-box {{ round.result_class }}">
-                <div class="round-no">R{{ round.no }}</div>
-                <div class="round-res">{{ round.result_label }}</div>
-                <div class="round-side">{{ round.side or '' }}</div>
-                <div class="round-score-after">{{ round.score_after or '' }}</div>
+              <div class="rcell {{ round.result_class }}">
+                <div class="rno">R{{ round.no }}</div>
+                <div class="res">{{ round.result_label }}</div>
               </div>
               {% endfor %}
             </div>
-            {% else %}
-            <div class="round-no">该平台当前接口未返回逐回合明细，仅展示分段比分。</div>
-            {% endif %}
           </div>
+          {% endif %}
           {% endfor %}
         </div>
       </div>
-    </div>
-    <div class="tables">
-      <div class="panel">
-        <h3>全队概览</h3>
-        <table>
-          <thead><tr><th>昵称</th><th class="num">R</th><th class="num">ADR</th><th class="num">K/D</th><th class="num">HS%</th></tr></thead>
-          <tbody>
-            {% for p in data.teammates %}
-            <tr class="{{ 'self-row' if p.name == data.player.name else '' }}">
-              <td>{{ p.name }}{{ ' (你)' if p.name == data.player.name else '' }}</td>
-              <td class="num">{{ p.rating }}</td>
-              <td class="num">{{ p.adr }}</td>
-              <td class="num">{{ p.kill }}/{{ p.death }}</td>
-              <td class="num">{{ p.hs }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      {% endif %}
+
+      <!-- 双方全队排行榜 -->
+      <div class="leaderboard-row">
+        <!-- 我方阵容 -->
+        <div class="panel-card" style="padding: 14px 16px;">
+          <div class="panel-title" style="color: #60a5fa; margin-bottom: 8px;">
+            <span>🛡️</span> 我方战力分布 (MY TEAM)
+          </div>
+          <table class="match-table">
+            <thead>
+              <tr>
+                <th>选手</th>
+                <th class="td-num">Rating</th>
+                <th class="td-num">ADR</th>
+                <th class="td-num">K/D</th>
+                <th class="td-num">HS%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in data.teammates %}
+              {% set is_me = (p.name == data.player.name) %}
+              <tr class="{{ 'is-self' if is_me else '' }}">
+                <td class="pname">
+                  {% if is_me %}
+                    <span style="color: #38bdf8;">{{ p.name }}</span> <span style="font-size: 10px; background: #0284c7; color: #fff; padding: 1px 4px; border-radius: 4px; margin-left: 2px;">你</span>
+                  {% else %}
+                    {{ p.name }}
+                  {% endif %}
+                </td>
+                {% set r = p.rating|float %}
+                <td class="td-num"><span class="r-badge {{ 'r-high' if r >= 1.20 else ('r-low' if r < 0.90 else 'r-mid') }}">{{ p.rating }}</span></td>
+                <td class="td-num">{{ p.adr }}</td>
+                <td class="td-num">{{ p.kill }}/{{ p.death }}</td>
+                <td class="td-num">{{ p.hs }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 敌方阵容 -->
+        <div class="panel-card" style="padding: 14px 16px;">
+          <div class="panel-title" style="color: #f87171; margin-bottom: 8px;">
+            <span>⚔️</span> 敌方战力分布 (OPPONENTS)
+          </div>
+          <table class="match-table">
+            <thead>
+              <tr>
+                <th>选手</th>
+                <th class="td-num">Rating</th>
+                <th class="td-num">ADR</th>
+                <th class="td-num">K/D</th>
+                <th class="td-num">HS%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in data.opponents %}
+              <tr>
+                <td class="pname">{{ p.name }}</td>
+                {% set r = p.rating|float %}
+                <td class="td-num"><span class="r-badge {{ 'r-high' if r >= 1.20 else ('r-low' if r < 0.90 else 'r-mid') }}">{{ p.rating }}</span></td>
+                <td class="td-num">{{ p.adr }}</td>
+                <td class="td-num">{{ p.kill }}/{{ p.death }}</td>
+                <td class="td-num">{{ p.hs }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="panel">
-        <h3>对手数据</h3>
-        <table>
-          <thead><tr><th>昵称</th><th class="num">R</th><th class="num">ADR</th><th class="num">K/D</th><th class="num">HS%</th></tr></thead>
-          <tbody>
-            {% for p in data.opponents %}
-            <tr>
-              <td>{{ p.name }}</td>
-              <td class="num">{{ p.rating }}</td>
-              <td class="num">{{ p.adr }}</td>
-              <td class="num">{{ p.kill }}/{{ p.death }}</td>
-              <td class="num">{{ p.hs }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+
+      <!-- LLM 赛后战术深度复盘 -->
+      <div class="llm-section">
+        <div class="llm-header">
+          <div class="llm-brand">
+            <span style="font-size: 13px;">🧠</span> AI TACTICAL REVIEW · 赛后深度战术复盘
+          </div>
+          <div style="font-size: 11px; color: #818cf8; font-weight: 600;">CS2 PRO ANALYST V2</div>
+        </div>
+
+        <div class="llm-title-text">{{ data.llm_title }}</div>
+
+        {% if data.llm_sections and data.llm_sections|length > 1 %}
+        <div class="llm-grid">
+          {% for sec in data.llm_sections %}
+          <div class="llm-card sec-{{ loop.index }}">
+            <div class="llm-card-tag">
+              {% if '战局' in sec.tag or '走势' in sec.tag %}
+                <span>🗺️</span>
+              {% elif '核心' in sec.tag or '表现' in sec.tag or '个人' in sec.tag %}
+                <span>⚡</span>
+              {% elif '团队' in sec.tag or '对位' in sec.tag %}
+                <span>👥</span>
+              {% elif '建议' in sec.tag or '改进' in sec.tag %}
+                <span>🎯</span>
+              {% else %}
+                <span>📌</span>
+              {% endif %}
+              {{ sec.tag }}
+            </div>
+            <div class="llm-card-body">{{ sec.content }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="fallback-detail">{{ data.llm_detail }}</div>
+        {% endif %}
       </div>
     </div>
-    <div class="llm">
-      <h3>LLM 评价</h3>
-      <div class="style">{{ data.llm_title }}</div>
-      <div class="detail">{{ data.llm_detail }}</div>
+
+    <!-- 底部时间戳与对局索引 -->
+    <div class="footer-bar">
+      <div>Match ID: {{ data.match_id }}</div>
+      <div>Generated by Shizuku CS Pro · {{ data.start_at }}</div>
     </div>
-    <div class="footer">Generated at {{ data.start_at }}</div>
   </div>
 </body>
 </html>

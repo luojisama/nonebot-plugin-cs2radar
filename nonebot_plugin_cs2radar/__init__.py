@@ -27,7 +27,7 @@ from .renderer import (
 )
 from .storage import get_bind_db_path
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 plugin_config = get_plugin_config(Config)
 driver_config = get_driver().config
@@ -59,11 +59,11 @@ __plugin_meta__ = PluginMetadata(
         "cs查询 [选手]\n"
         "cs赛事\n"
         "赛果\n"
-        "5e [ID/昵称]\n"
-        "pw [ID/昵称]\n"
+        "5e [ID/昵称] [-r]\n"
+        "pw [ID/昵称/SteamID] [-r]\n"
         "pwlogin [手机号] [验证码]\n"
-        "bind [platform] [name]\n"
-        "match [platform] [@群友] [round]"
+        "bind [5e|pw] [玩家名]\n"
+        "match [platform] [@群友] [round] [-r]"
     ),
     type="application",
     homepage="https://github.com/luojisama/nonebot-plugin-cs2radar",
@@ -145,6 +145,149 @@ def _platform_theme(platform: str) -> tuple[str, str, str]:
 
 def _fmt_pct(v: float) -> str:
     return f"{v * 100:.1f}%"
+
+
+def _parse_llm_sections(text: str) -> list[dict]:
+    if not text:
+        return []
+    pattern = r'【([^】]+)】'
+    parts = re.split(pattern, text)
+    if len(parts) >= 3 and not parts[0].strip():
+        sections = []
+        for i in range(1, len(parts), 2):
+            tag = parts[i].strip()
+            body = parts[i+1].strip() if i+1 < len(parts) else ""
+            sections.append({"tag": tag, "content": body})
+        return sections
+    elif len(parts) >= 3:
+        sections = []
+        if parts[0].strip():
+            sections.append({"tag": "总览", "content": parts[0].strip()})
+        for i in range(1, len(parts), 2):
+            tag = parts[i].strip()
+            body = parts[i+1].strip() if i+1 < len(parts) else ""
+            sections.append({"tag": tag, "content": body})
+        return sections
+    return [{"tag": "复盘点评", "content": text.strip()}]
+
+
+def _build_profile_context_5e(data: dict) -> dict:
+    nickname = data.get("nickname", "5E玩家")
+    stats = data.get("stats", {})
+    career = stats.get("career", {})
+    role = stats.get("role", {})
+    recent_matches = stats.get("recent_matches", [])
+
+    match_total = int(career.get("match_total") or 0)
+    win_total = int(career.get("win_total") or 0)
+    tie_total = int(career.get("tie_total") or 0)
+    loss_total = int(career.get("loss_total") or 0)
+    win_rate = f"{(win_total / match_total * 100):.1f}%" if match_total > 0 else "0.0%"
+
+    kill_total = int(career.get("kill_total") or 0)
+    headshot_total = int(career.get("headshot_total") or 0)
+    hs_rate = f"{(headshot_total / kill_total * 100):.1f}%" if kill_total > 0 else (
+        f"{(float(career.get('per_headshot', 0)) * 100):.1f}%" if career.get('per_headshot') else "0.0%"
+    )
+
+    recent_list = []
+    for rm in recent_matches[:5]:
+        is_win = rm.get("is_win")
+        is_tie = rm.get("is_tie")
+        res = "胜" if is_win else ("平" if is_tie else "负")
+        recent_list.append({
+            "map": rm.get("map_name") or rm.get("map"),
+            "result": res,
+            "score": str(rm.get("score") or ""),
+            "rating": rm.get("rating"),
+            "kill": rm.get("kill"),
+            "death": rm.get("death"),
+            "adr": rm.get("adr"),
+        })
+
+    return {
+        "platform": "5E ARENA 对战平台",
+        "player_name": nickname,
+        "elo": career.get("elo_9") or career.get("elo", 0),
+        "rank": career.get("rank", 0),
+        "rating": career.get("rating", 0),
+        "adr": career.get("adr", 0),
+        "kpr": career.get("kpr", 0),
+        "rws": career.get("rws", 0),
+        "matches": f"总场次 {match_total} (胜 {win_total} / 平 {tie_total} / 负 {loss_total})",
+        "win_rate": win_rate,
+        "headshot_ratio": hs_rate,
+        "win_streak": career.get("win_streak", 0),
+        "role_name": role.get("role_name", ""),
+        "role_desc": role.get("role_desc", ""),
+        "role_tags": role.get("role_tags", []),
+        "role_level": role.get("score_level", ""),
+        "recent_matches": recent_list,
+    }
+
+
+def _build_profile_context(data: dict) -> dict:
+    summary = data.get("summary", {})
+    stats = data.get("stats", {})
+    recent_matches = data.get("recent_matches", [])
+
+    wr = stats.get("winRate", 0)
+    win_rate_str = f"{wr * 100:.1f}%" if wr and wr <= 1 else f"{wr}%"
+    hs = stats.get("headShotRatio", 0)
+    hs_str = f"{hs * 100:.1f}%" if hs and hs <= 1 else f"{hs}%"
+    ek = stats.get("entryKillRatio", 0)
+    ek_str = f"{ek * 100:.1f}%" if ek and ek <= 1 else f"{ek}%"
+
+    hot_maps = [
+        {"map": m.get("mapName"), "matches": m.get("totalMatch"), "win_rate": f"{(m.get('winCount', 0)/m.get('totalMatch', 1)*100):.1f}%"}
+        for m in stats.get("hotMaps", [])[:3] if m.get("totalMatch")
+    ]
+    weapons = (stats.get("hotWeapons") or []) + (stats.get("hotWeapons2") or [])
+    hot_weapons = [
+        {"name": w.get("weaponName") or w.get("nameZh") or w.get("name"), "kills": w.get("weaponKill") or w.get("killNum", 0)}
+        for w in weapons[:4]
+    ]
+    recent_list = [
+        {
+            "map": rm.get("mapName"),
+            "result": "胜" if rm.get("team") == rm.get("winTeam") else ("平" if rm.get("score1") == rm.get("score2") else "负"),
+            "score": f"{rm.get('score1')}:{rm.get('score2')}",
+            "rating": rm.get("pwRating") if rm.get("pwRating") is not None else rm.get("rating"),
+            "kd": f"{rm.get('kill', 0)}/{rm.get('death', 0)}"
+        }
+        for rm in recent_matches[:5]
+    ]
+
+    return {
+        "player_name": summary.get("nickname", "未知"),
+        "steam_id": str(summary.get("steamId", "")),
+        "season": stats.get("seasonId", "当前赛季"),
+        "pvp_score": stats.get("pvpScore", 0),
+        "pvp_rank": stats.get("pvpRank", 0),
+        "rating": stats.get("pwRating") if stats.get("pwRating") is not None else stats.get("rating", 0),
+        "adr": stats.get("adr", 0),
+        "kd": stats.get("kd", 0),
+        "rws": stats.get("rws", 0),
+        "win_rate": win_rate_str,
+        "headshot_ratio": hs_str,
+        "entry_kill_ratio": ek_str,
+        "matches_count": stats.get("cnt", 0),
+        "mvp_count": stats.get("mvpCount", 0),
+        "radar": {
+            "shot": round(stats.get("shot", 0), 1),
+            "victory": round(stats.get("victory", 0), 1),
+            "breach": round(stats.get("breach", 0), 1),
+            "prop": round(stats.get("prop", 0), 1),
+            "snipe": round(stats.get("snipe", 0), 1),
+        },
+        "highlights": {
+            "multi_kills": f"2K:{stats.get('k2', 0)} / 3K:{stats.get('k3', 0)} / 4K:{stats.get('k4', 0)} / 5K:{stats.get('k5', 0)}",
+            "clutch_wins": stats.get("endingWin", 0)
+        },
+        "hot_maps": hot_maps,
+        "hot_weapons": hot_weapons,
+        "recent_matches": recent_list
+    }
 
 
 def _build_match_view_data(match_data, llm_title: str, llm_detail: str) -> dict:
@@ -235,6 +378,7 @@ def _build_match_view_data(match_data, llm_title: str, llm_detail: str) -> dict:
         "opponents": [_p(x) for x in match_data.opponents],
         "llm_title": llm_title,
         "llm_detail": llm_detail,
+        "llm_sections": _parse_llm_sections(llm_detail),
     }
 
 
@@ -281,6 +425,11 @@ async def handle_bind(event: MessageEvent, args: Message = CommandArg()):
 @match_cmd.handle()
 async def handle_match(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
     raw = args.extract_plain_text().strip()
+    refresh = False
+    if "-r" in raw or "--refresh" in raw or "刷新" in raw:
+        refresh = True
+        raw = raw.replace("--refresh", "").replace("-r", "").replace("刷新", "").strip()
+
     platform, round_index = parse_match_args(raw)
     target_qq = _extract_target_qq(bot, event)
 
@@ -293,12 +442,12 @@ async def handle_match(bot: Bot, event: MessageEvent, args: Message = CommandArg
     llm_title = "评价暂不可用"
     llm_detail = "未配置或调用失败，本次仅展示战绩数据。"
     try:
-        result = await llm.evaluate(match_data.llm_context())
+        result = await llm.evaluate(match_data.llm_context(), refresh=refresh)
         if result:
             llm_title = result.title
             llm_detail = result.detail
     except Exception as e:
-        logger.warning(f"[cs_pro] llm evaluate failed: {e}")
+        logger.warning(f"[cs2radar] llm evaluate failed: {e}")
 
     view_data = _build_match_view_data(match_data, llm_title, llm_detail)
     image_bytes = await render_match_detail_card(view_data)
@@ -387,33 +536,86 @@ async def handle_result_search():
 
 
 @five_e_stats.handle()
-async def handle_five_e_stats(arg: Message = CommandArg()):
-    input_str = arg.extract_plain_text().strip()
-    if not input_str:
-        await five_e_stats.finish("请输入5E玩家域名、ID或昵称，例如: /5e 15429443s91f72")
+async def handle_five_e_stats(bot: Bot, event: MessageEvent, arg: Message = CommandArg()):
+    raw = arg.extract_plain_text().strip()
+    refresh = False
+    if "-r" in raw or "--refresh" in raw or "刷新" in raw:
+        refresh = True
+        raw = raw.replace("--refresh", "").replace("-r", "").replace("刷新", "").strip()
 
-    await five_e_stats.send(f"正在查询 5E 玩家 {input_str}...")
-    domain = input_str
+    target_qq = _extract_target_qq(bot, event)
+    is_self = (target_qq == str(event.user_id))
+
+    input_str = raw
+    domain = ""
+    target_name = ""
+    search_info = {}
+
+    if not input_str:
+        # 无参数，查绑定
+        binding = store.get_binding(target_qq, "5e")
+        if not binding:
+            if is_self:
+                await five_e_stats.finish("未检测到您的 5E 账号绑定，请先绑定：/bind 5e <玩家名/域名>，或直接指定玩家查询：/5e <玩家名/域名>")
+            else:
+                await five_e_stats.finish(f"该用户 (QQ: {target_qq}) 暂未绑定 5E 账号。")
+
+        target_name = binding.player_name
+        domain = binding.domain or binding.uuid or target_name
+        await five_e_stats.send(f"正在查询绑定的 5E 玩家 {target_name or domain}...")
+    else:
+        # 有参数，查指定玩家
+        await five_e_stats.send(f"正在查询 5E 玩家 {input_str}...")
+        domain = input_str
+        target_name = input_str
 
     try:
-        is_id = re.match(r"^\d+s\w+$|^\d+$|^[0-9a-f-]{36}$", input_str)
-        search_info = {}
+        is_id = bool(re.match(r"^\d+s\w+$|^\d+$|^[0-9a-f-]{36}$", domain))
         if not is_id:
-            search_results = await five_e_crawler.search_player(input_str)
+            search_results = await five_e_crawler.search_player(domain)
             if not search_results:
-                await five_e_stats.finish(f"未找到昵称为 {input_str} 的玩家。")
+                await five_e_stats.finish(f"未找到昵称为 {domain} 的 5E 玩家。")
             search_info = search_results[0]
             domain = search_info["domain"]
-            await five_e_stats.send(f"匹配到玩家: {search_info['name']} ({domain})，正在获取详细战绩...")
+            target_name = search_info.get("name", domain)
+            await five_e_stats.send(f"匹配到玩家: {target_name} ({domain})，正在获取详细战绩...")
 
-        data = await five_e_crawler.get_player_data(domain)
-        if (not data.get("nickname") or data["nickname"] == "Unknown") and search_info.get("name"):
-            data["nickname"] = search_info["name"]
-        if (not data.get("avatar")) and search_info.get("avatar"):
-            data["avatar"] = search_info["avatar"]
+        data = await five_e_crawler.get_player_data(
+            domain,
+            nickname=target_name or search_info.get("name", ""),
+            avatar=search_info.get("avatar", "")
+        )
 
-        if not data.get("stats") or not data["stats"].get("career"):
-            await five_e_stats.finish(f"未找到玩家 {domain} 的有效战绩数据。")
+        if not data or not data.get("stats") or not data["stats"].get("career"):
+            await five_e_stats.finish(f"未找到玩家 {domain} 的有效 5E 战绩数据。")
+
+        # 生成 / 获取 LLM 主页评价
+        try:
+            profile_ctx = _build_profile_context_5e(data)
+            career = data.get("stats", {}).get("career", {})
+            cnt = int(career.get("match_total") or 0)
+            season_id = str(career.get("best_season") or "")
+            llm_res = await llm.evaluate_profile(
+                profile_ctx,
+                platform="5e",
+                refresh=refresh,
+                target_steam_id=domain,
+                match_cnt=cnt,
+                season_id=season_id,
+            )
+            if llm_res:
+                data["llm_title"] = llm_res.title
+                data["llm_detail"] = llm_res.detail
+                data["llm_sections"] = _parse_llm_sections(llm_res.detail)
+            else:
+                data["llm_title"] = "天梯强力进攻先锋"
+                data["llm_detail"] = "【战力定位】在5E高分天梯打出极高攻防效率。【技术风格】拼抢激进，单兵摧毁力强。【武器地图】主力枪械覆盖全面。【进阶建议】保持进攻侵略性，协同团队进退。"
+                data["llm_sections"] = _parse_llm_sections(data["llm_detail"])
+        except Exception as e:
+            logger.warning(f"生成5E主页LLM评价失败: {e}")
+            data["llm_title"] = "天梯强力进攻先锋"
+            data["llm_detail"] = "【战力定位】在5E高分天梯打出极高攻防效率。【技术风格】拼抢激进，单兵摧毁力强。【武器地图】主力枪械覆盖全面。【进阶建议】保持进攻侵略性，协同团队进退。"
+            data["llm_sections"] = _parse_llm_sections(data["llm_detail"])
 
         image_bytes = await render_stats_card(data)
         await five_e_stats.finish(MessageSegment.image(image_bytes))
@@ -442,21 +644,55 @@ async def handle_pw_login(arg: Message = CommandArg()):
 
 
 @pw_stats.handle()
-async def handle_pw_stats(arg: Message = CommandArg()):
-    input_str = arg.extract_plain_text().strip()
+async def handle_pw_stats(bot: Bot, event: MessageEvent, arg: Message = CommandArg()):
+    raw = arg.extract_plain_text().strip()
+    refresh = False
+    if "-r" in raw or "--refresh" in raw or "刷新" in raw:
+        refresh = True
+        raw = raw.replace("--refresh", "").replace("-r", "").replace("刷新", "").strip()
+
+    target_qq = _extract_target_qq(bot, event)
+    is_self = (target_qq == str(event.user_id))
+
+    input_str = raw
+    target_steam_id = ""
+    search_info = {}
+
     if not input_str:
-        await pw_stats.finish("请输入完美平台玩家昵称或 SteamId，例如: /pw sh1ro")
-    if not pw_crawler.has_session():
-        await pw_stats.finish("请先使用 /pwlogin <手机号> <验证码> 登录完美平台后再查询。")
+        # 无参数查询，走绑定
+        binding = store.get_binding(target_qq, "pw")
+        if not binding:
+            if is_self:
+                await pw_stats.finish("未检测到您的完美账号绑定，请先绑定：/bind pw <玩家名>，或直接指定玩家查询：/pw <玩家名/SteamID>")
+            else:
+                await pw_stats.finish(f"该用户 (QQ: {target_qq}) 暂未绑定完美账号。")
 
-    await pw_stats.send(f"正在查询完美玩家 {input_str}...")
+        target_name = binding.player_name
+        target_steam_id = str(binding.uuid or "").strip()
 
-    try:
+        if not target_steam_id or not target_steam_id.isdigit():
+            if not pw_crawler.has_session():
+                await pw_stats.finish("请先使用 /pwlogin <手机号> <验证码> 登录完美平台后再查询。")
+            await pw_stats.send(f"正在查询绑定的完美玩家 {target_name}...")
+            search_results = await pw_crawler.search_player(target_name)
+            if not search_results:
+                await pw_stats.finish(f"未找到已绑定昵称 {target_name} 的完美玩家，请检查绑定：/bind pw <玩家名>")
+            search_info = search_results[0]
+            target_steam_id = str(search_info["steamId"])
+            # 自动补全 SteamID
+            domain = str(search_info.get("domain") or "").strip()
+            store.upsert_binding(target_qq, "pw", target_name, domain, target_steam_id)
+        else:
+            await pw_stats.send(f"正在查询绑定的完美玩家 {target_name or target_steam_id}...")
+    else:
+        # 有参数查询，查指定玩家
+        await pw_stats.send(f"正在查询完美玩家 {input_str}...")
         is_steam_id = input_str.isdigit() and len(input_str) > 10
         target_steam_id = input_str
-        search_info = {}
 
         if not is_steam_id:
+            if not pw_crawler.has_session():
+                await pw_stats.finish("请先使用 /pwlogin <手机号> <验证码> 登录完美平台后再查询。")
             search_results = await pw_crawler.search_player(input_str)
             if not search_results:
                 await pw_stats.finish(f"未找到昵称为 {input_str} 的玩家。")
@@ -464,6 +700,7 @@ async def handle_pw_stats(arg: Message = CommandArg()):
             target_steam_id = str(search_info["steamId"])
             await pw_stats.send(f"匹配到玩家: {search_info.get('pvpNickName', '未知')}，正在获取详细战绩...")
 
+    try:
         data = await pw_crawler.get_player_data(target_steam_id)
         if "error" in data:
             await pw_stats.finish(f"查询完美战绩失败: {data['error']}")
@@ -475,6 +712,32 @@ async def handle_pw_stats(arg: Message = CommandArg()):
         if not data.get("summary", {}).get("avatarUrl"):
             data["summary"]["avatarUrl"] = search_info.get("pvpAvatar")
 
+        # 生成 / 获取 LLM 主页评价
+        try:
+            profile_ctx = _build_profile_context(data)
+            cnt = data.get("stats", {}).get("cnt", 0)
+            season_id = str(data.get("stats", {}).get("seasonId") or "")
+            llm_res = await llm.evaluate_profile(
+                profile_ctx,
+                refresh=refresh,
+                target_steam_id=target_steam_id,
+                match_cnt=cnt,
+                season_id=season_id,
+            )
+            if llm_res:
+                data["llm_title"] = llm_res.title
+                data["llm_detail"] = llm_res.detail
+                data["llm_sections"] = _parse_llm_sections(llm_res.detail)
+            else:
+                data["llm_title"] = "全能型竞技核心"
+                data["llm_detail"] = "该玩家数据积累中，展现出扎实的技术功底与极高的成长潜力。"
+                data["llm_sections"] = []
+        except Exception as e:
+            logger.warning(f"生成主页LLM评价失败: {e}")
+            data["llm_title"] = "全能型竞技核心"
+            data["llm_detail"] = "该玩家数据积累中，展现出扎实的技术功底与极高的成长潜力。"
+            data["llm_sections"] = []
+
         image_bytes = await render_pw_stats_card(data)
         await pw_stats.finish(MessageSegment.image(image_bytes))
     except (FinishedException, MatcherException):
@@ -482,4 +745,3 @@ async def handle_pw_stats(arg: Message = CommandArg()):
     except Exception as e:
         logger.error(f"Error in pw_stats: {e}")
         await pw_stats.finish(f"完美战绩查询失败: {str(e)}")
-

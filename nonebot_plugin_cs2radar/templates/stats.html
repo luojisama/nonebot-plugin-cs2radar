@@ -1,307 +1,783 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        :root {
-            --bg-color: #0b0e14;
-            --card-bg: #141921;
-            --accent-color: #f74d4d;
-            --accent-gradient: linear-gradient(135deg, #f74d4d, #f78c00);
-            --text-main: #e1e1e1;
-            --text-dim: #8a8f98;
-            --rank-color: #5ffc7b;
-            --win-color: #5ffc7b;
-            --loss-color: #ff4d4d;
-            --tie-color: #a0a0a0;
-            --border-color: rgba(255, 255, 255, 0.06);
-        }
-        * { box-sizing: border-box; }
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-            margin: 0;
-            padding: 20px;
-            width: 640px;
-        }
-        .container {
-            background-color: var(--card-bg);
-            border-radius: 20px;
-            padding: 28px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            position: relative;
-        }
-        .container::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--accent-gradient);
-        }
-        .platform-badge {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: var(--accent-gradient);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 800;
-            color: #fff;
-            letter-spacing: 1px;
-        }
-        .header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 26px;
-        }
-        .avatar {
-            width: 90px;
-            height: 90px;
-            border-radius: 50%;
-            border: 3px solid var(--accent-color);
-            padding: 3px;
-            background: var(--bg-color);
-            object-fit: cover;
-            margin-right: 22px;
-        }
-        .user-info h1 {
-            margin: 0;
-            font-size: 32px;
-            font-weight: 800;
-            color: #fff;
-        }
-        .user-info p {
-            margin: 6px 0 0;
-            color: var(--text-dim);
-            font-size: 14px;
-        }
-        .elo-card, .role-card, .card {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 16px;
-            border: 1px solid var(--border-color);
-        }
-        .elo-card {
-            padding: 18px;
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 14px;
-            margin-bottom: 22px;
-        }
-        .elo-item { text-align: center; }
-        .elo-label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-dim);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .elo-value {
-            font-size: 34px;
-            font-weight: 800;
-            color: var(--rank-color);
-        }
-        .role-card {
-            padding: 18px;
-            margin-bottom: 22px;
-            display: flex;
-            gap: 16px;
-            align-items: center;
-        }
-        .role-icon {
-            width: 56px;
-            height: 56px;
-            object-fit: contain;
-        }
-        .role-main { flex: 1; }
-        .role-name {
-            font-size: 20px;
-            font-weight: 800;
-            color: #fff;
-        }
-        .role-desc {
-            margin-top: 6px;
-            font-size: 12px;
-            color: var(--text-dim);
-            line-height: 1.6;
-        }
-        .role-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 10px;
-        }
-        .role-tag {
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 999px;
-            background: rgba(255,255,255,.05);
-            border: 1px solid rgba(255,255,255,.08);
-        }
-        .stats-grid, .combat-grid, .clutch-grid {
-            display: grid;
-            gap: 12px;
-            margin-bottom: 22px;
-        }
-        .stats-grid { grid-template-columns: repeat(3, 1fr); }
-        .combat-grid { grid-template-columns: repeat(4, 1fr); }
-        .clutch-grid { grid-template-columns: repeat(5, 1fr); }
-        .card {
-            padding: 14px 10px;
-            text-align: center;
-            border-radius: 12px;
-        }
-        .label {
-            font-size: 11px;
-            color: var(--text-dim);
-            margin-bottom: 8px;
-        }
-        .value {
-            font-size: 20px;
-            font-weight: 800;
-            color: #fff;
-        }
-        .section-title {
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .section-title::after {
-            content: "";
-            flex: 1;
-            height: 1px;
-            background: var(--border-color);
-        }
-        .recent-matches { margin-top: 8px; }
-        .match-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .match-card {
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 12px;
-            padding: 12px 18px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-left: 4px solid transparent;
-            border: 1px solid var(--border-color);
-        }
-        .match-card.win { border-left-color: var(--win-color); }
-        .match-card.loss { border-left-color: var(--loss-color); }
-        .match-card.tie { border-left-color: var(--tie-color); }
-        .match-left {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .res-tag {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 16px;
-        }
-        .win .res-tag { background: rgba(95,252,123,.15); color: var(--win-color); }
-        .loss .res-tag { background: rgba(255,77,77,.15); color: var(--loss-color); }
-        .tie .res-tag { background: rgba(160,160,160,.15); color: var(--tie-color); }
-        .m-info { display: flex; flex-direction: column; }
-        .m-map { font-weight: 700; font-size: 14px; color: #fff; }
-        .m-score { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-        .m-stats { display: flex; gap: 18px; }
-        .m-stat { display: flex; flex-direction: column; align-items: flex-end; }
-        .m-val { font-weight: 700; font-size: 15px; color: var(--accent-color); }
-        .m-lab { font-size: 10px; color: var(--text-dim); text-transform: uppercase; margin-top: 2px; }
-        .footer {
-            margin-top: 26px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border-color);
-            text-align: center;
-            font-size: 11px;
-            color: var(--text-dim);
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>5E Arena Player Profile</title>
+  <style>
+    :root {
+      --bg-base: #0a0c10;
+      --bg-card: rgba(18, 22, 31, 0.75);
+      --bg-card-hover: rgba(26, 32, 44, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(255, 107, 0, 0.35);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --color-5e-primary: #ff6b00;
+      --color-5e-light: #ff8800;
+      --color-5e-amber: #f59e0b;
+      --color-5e-glow: rgba(255, 107, 0, 0.25);
+
+      --color-win: #10b981;
+      --color-win-glow: rgba(16, 185, 129, 0.25);
+      --color-loss: #f43f5e;
+      --color-loss-glow: rgba(244, 63, 94, 0.25);
+      --color-draw: #f59e0b;
+      --color-draw-glow: rgba(245, 158, 11, 0.25);
+
+      --color-rating-hero: #ff8800;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 960px;
+      margin: 0;
+      padding: 24px;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      background: radial-gradient(circle at 50% -20%, rgba(255, 107, 0, 0.16), transparent 70%),
+                  radial-gradient(circle at 90% 40%, rgba(245, 158, 11, 0.08), transparent 60%),
+                  #0e121a;
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+    }
+
+    /* 顶部 5E 玩家概要卡片 */
+    .profile-header {
+      padding: 28px 32px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .player-identity {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .avatar-wrapper {
+      position: relative;
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      padding: 3px;
+      background: linear-gradient(135deg, #ff6b00, #f59e0b);
+      box-shadow: 0 0 20px rgba(255, 107, 0, 0.35);
+    }
+
+    .avatar-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+      background: #1e293b;
+    }
+
+    .player-info h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .platform-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(255, 107, 0, 0.15);
+      border: 1px solid rgba(255, 107, 0, 0.45);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #ff8800;
+      letter-spacing: 0.5px;
+    }
+
+    .player-meta {
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .player-meta .dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    /* 顶部天梯积分胶囊 */
+    .rank-capsule-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    .rank-capsule {
+      background: rgba(18, 22, 31, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 10px 18px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .rank-capsule .cap-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .rank-capsule .cap-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: #ff8800;
+    }
+
+    .rank-capsule.win-rate .cap-val {
+      color: var(--color-win);
+    }
+
+    /* 主内容区 */
+    .main-content {
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: "";
+      width: 3px;
+      height: 12px;
+      background: #ff6b00;
+      border-radius: 2px;
+    }
+
+    /* 核心数据网格 */
+    .hero-stats-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 16px;
+    }
+
+    .hero-rating-card {
+      background: linear-gradient(145deg, rgba(255, 107, 0, 0.15) 0%, rgba(245, 158, 11, 0.04) 100%);
+      border: 1px solid rgba(255, 107, 0, 0.4);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      box-shadow: inset 0 0 25px rgba(255, 107, 0, 0.08);
+    }
+
+    .hero-rating-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #ff8800;
+      letter-spacing: 1px;
+    }
+
+    .hero-rating-val {
+      font-size: 46px;
+      font-weight: 900;
+      color: #ff8800;
+      line-height: 1.1;
+      margin: 4px 0;
+      text-shadow: 0 0 25px rgba(255, 107, 0, 0.45);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 107, 0, 0.2);
+      border: 1px solid rgba(255, 107, 0, 0.5);
+      color: #ffedd5;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .sub-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    .stat-tile {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .stat-tile .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-tile .value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-tile .sub {
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* 5E 专属角色定位卡 */
+    .role-card-5e {
+      background: linear-gradient(135deg, rgba(255, 107, 0, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%);
+      border: 1px solid rgba(255, 107, 0, 0.25);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .role-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .role-icon-box {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: rgba(255, 107, 0, 0.15);
+      border: 1px solid rgba(255, 107, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .role-name-text {
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffedd5;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .role-desc-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .role-tags-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .role-tag-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: rgba(255, 107, 0, 0.12);
+      border: 1px solid rgba(255, 107, 0, 0.3);
+      color: #fed7aa;
+    }
+
+    /* 战斗高光紧凑条 */
+    .highlight-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .highlight-item {
+      background: rgba(18, 22, 31, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .highlight-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .highlight-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ff8800;
+    }
+
+    /* 最近 5 场比赛走势 */
+    .recent-matches-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    .mini-match-card {
+      background: rgba(18, 22, 31, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mini-match-card.win {
+      border-top: 3px solid var(--color-win);
+    }
+
+    .mini-match-card.loss {
+      border-top: 3px solid var(--color-loss);
+    }
+
+    .mini-match-card.draw {
+      border-top: 3px solid var(--color-draw);
+    }
+
+    .mini-match-res {
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+
+    .mini-match-card.win .mini-match-res { color: var(--color-win); }
+    .mini-match-card.loss .mini-match-res { color: var(--color-loss); }
+    .mini-match-card.draw .mini-match-res { color: var(--color-draw); }
+
+    .mini-match-map {
+      font-size: 11px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mini-match-score {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 3px 0;
+    }
+
+    .mini-match-rating {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    /* LLM 玩家生涯画像深度总评 */
+    .llm-section {
+      background: linear-gradient(180deg, rgba(30, 36, 48, 0.4) 0%, rgba(18, 22, 31, 0.6) 100%);
+      border: 1px solid rgba(255, 107, 0, 0.25);
+      border-radius: 16px;
+      padding: 22px 24px;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    .llm-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 10px;
+    }
+
+    .llm-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, #ff8800, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+    }
+
+    .llm-title-text {
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 16px;
+      letter-spacing: -0.3px;
+    }
+
+    .llm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .llm-card {
+      background: rgba(14, 18, 26, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .llm-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+    }
+
+    .llm-card.sec-1::before { background: #ff8800; }
+    .llm-card.sec-2::before { background: #f59e0b; }
+    .llm-card.sec-3::before { background: #38bdf8; }
+    .llm-card.sec-4::before { background: #f43f5e; }
+
+    .llm-card-tag {
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .llm-card.sec-1 .llm-card-tag { color: #ff8800; }
+    .llm-card.sec-2 .llm-card-tag { color: #f59e0b; }
+    .llm-card.sec-3 .llm-card-tag { color: #38bdf8; }
+    .llm-card.sec-4 .llm-card-tag { color: #f43f5e; }
+
+    .llm-card-body {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      text-align: justify;
+    }
+
+    .fallback-detail {
+      font-size: 13px;
+      line-height: 1.7;
+      color: #cbd5e1;
+    }
+
+    /* 底部标注栏 */
+    .footer-bar {
+      padding: 14px 32px;
+      background: rgba(0, 0, 0, 0.25);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="platform-badge">5E 对战平台</div>
-        <div class="header">
-            <img class="avatar" src="{{ avatar or 'https://oss-arena.5eplay.com/images/default_avatar.png' }}" alt="Avatar">
-            <div class="user-info">
-                <h1>{{ nickname }}</h1>
-                <p>
-                    <span>5E Arena 玩家战绩</span>
-                    {% if stats.career.match_time %}
-                    <span> • 总时长: {{ stats.career.match_time }}h</span>
-                    {% endif %}
-                </p>
-            </div>
+  <div class="container">
+    <!-- 顶部玩家概览 -->
+    <div class="profile-header">
+      <div class="player-identity">
+        <div class="avatar-wrapper">
+          <img src="{{ avatar or '' }}" class="avatar-img" alt="Avatar" />
         </div>
-        <div class="elo-card">
-            <div class="elo-item"><span class="elo-label">当前 ELO</span><span class="elo-value">{{ stats.career.elo_9 or '---' }}</span></div>
-            <div class="elo-item"><span class="elo-label">胜率</span><span class="elo-value" style="color:#fff;text-shadow:none;">{{ '%.1f' % (stats.career.win_total / stats.career.match_total * 100) if stats.career.match_total else '0.0' }}%</span></div>
+        <div class="player-info">
+          <h1>
+            {{ nickname or '5E 玩家' }}
+            <span class="platform-badge">
+              <span>🔥</span> 5E ARENA 对战平台
+            </span>
+          </h1>
+          <div class="player-meta">
+            <span>5E 竞技档案</span>
+            {% if stats.career and stats.career.match_time_total %}
+            <span class="dot"></span>
+            {% set hrs = (stats.career.match_time_total|int / 3600)|round(1) if stats.career.match_time_total else (stats.career.match_time or 0) %}
+            <span>生涯时长: {{ hrs }}h</span>
+            {% endif %}
+            {% if stats.career and stats.career.win_streak and stats.career.win_streak > 1 %}
+            <span class="dot"></span>
+            <span style="color: #ff8800; font-weight: 700;">🔥 {{ stats.career.win_streak }} 连胜中</span>
+            {% endif %}
+          </div>
         </div>
-        {% if stats.role and stats.role.role_name %}
-        <div class="role-card">
-            <img class="role-icon" src="{{ stats.role.role_icon }}" alt="Role Icon" onerror="this.style.display='none'">
-            <div class="role-main">
-                <div class="role-name">{{ stats.role.role_name }}</div>
-                <div class="role-desc">{{ stats.role.role_desc }}</div>
-                <div class="role-tags">{% for tag in stats.role.role_tags %}<span class="role-tag">{{ tag }}</span>{% endfor %}</div>
-            </div>
+      </div>
+
+      <div class="rank-capsule-group">
+        <div class="rank-capsule">
+          <div class="cap-label">当前 ELO</div>
+          <div class="cap-val">{{ stats.career.elo_9 or stats.career.elo or '---' }}</div>
         </div>
-        {% endif %}
-        <div class="section-title">基础数据</div>
-        <div class="stats-grid">
-            <div class="card"><div class="label">Rating</div><div class="value">{{ stats.career.rating or '0.00' }}</div></div>
-            <div class="card"><div class="label">ADR</div><div class="value">{{ stats.career.adr or stats.best_season.adr or '0.0' }}</div></div>
-            <div class="card"><div class="label">RWS</div><div class="value">{{ stats.career.rws or '0.00' }}</div></div>
-            <div class="card"><div class="label">KPR</div><div class="value">{{ stats.career.kpr or '0.00' }}</div></div>
-            <div class="card"><div class="label">胜 / 场</div><div class="value">{{ stats.career.win_total or '0' }} / {{ stats.career.match_total or '0' }}</div></div>
-            <div class="card"><div class="label">HS%</div><div class="value">{{ '%.1f' % (stats.career.headshot_total / stats.career.kill_total * 100) if stats.career.kill_total else '0.0' }}%</div></div>
+        <div class="rank-capsule">
+          <div class="cap-label">总场次</div>
+          <div class="cap-val">{{ stats.career.match_total or '0' }}</div>
         </div>
-        <div class="section-title">高光数据</div>
-        <div class="combat-grid">{% for item in combat.summary_cards %}<div class="card"><div class="label">{{ item.label }}</div><div class="value">{{ item.value }}</div></div>{% endfor %}</div>
-        <div class="section-title">残局拆分</div>
-        <div class="clutch-grid">{% for item in combat.clutch_cards %}<div class="card"><div class="label">{{ item.label }}</div><div class="value">{{ item.value }}</div></div>{% endfor %}</div>
-        {% if stats.recent_matches %}
-        <div class="recent-matches">
-            <div class="section-title">最近 5 场比赛</div>
-            <div class="match-list">
-                {% for match in stats.recent_matches %}
-                {% set res_class = 'win' if match.is_win else ('tie' if match.is_tie else 'loss') %}
-                <div class="match-card {{ res_class }}">
-                    <div class="match-left">
-                        <div class="res-tag">{{ '胜' if match.is_win else ('平' if match.is_tie else '负') }}</div>
-                        <div class="m-info"><span class="m-map">{{ match.map_name }}</span><span class="m-score">{{ match.score }}</span></div>
-                    </div>
-                    <div class="m-stats">
-                        <div class="m-stat"><span class="m-val">{{ match.rating }}</span><span class="m-lab">Rating</span></div>
-                        <div class="m-stat"><span class="m-val">{{ match.kill }}/{{ match.death }}</span><span class="m-lab">K/D</span></div>
-                        <div class="m-stat"><span class="m-val">{{ match.adr or '0.0' }}</span><span class="m-lab">ADR</span></div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
+        <div class="rank-capsule win-rate">
+          <div class="cap-label">综合胜率</div>
+          {% set wr = (stats.career.win_total / stats.career.match_total * 100) if (stats.career and stats.career.match_total) else (stats.career.win_rate or 0) %}
+          <div class="cap-val">{{ '%.1f' % wr }}%</div>
         </div>
-        {% endif %}
-        <div class="footer">CS2 战绩查询报告 • 生成时间: {{ now }}</div>
+      </div>
     </div>
+
+    <!-- 主体区域 -->
+    <div class="main-content">
+      <!-- 核心表现 Hero Cards -->
+      <div>
+        <div class="section-title">核心战力指标 · CAREER PERFORMANCE</div>
+        <div class="hero-stats-grid">
+          {% set r = (stats.career.rating or stats.best_season.rating or 0)|float %}
+          <div class="hero-rating-card">
+            <div class="hero-rating-label">5E RATING</div>
+            <div class="hero-rating-val">{{ '%.2f' % r }}</div>
+            <div class="hero-badge">
+              {% if r >= 1.30 %}
+                <span>👑</span> 极致CARRY
+              {% elif r >= 1.15 %}
+                <span>🔥</span> 强势破点
+              {% elif r >= 0.95 %}
+                <span>⚡</span> 稳定发挥
+              {% else %}
+                <span>🛡️</span> 团队基石
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="sub-stats-grid">
+            <div class="stat-tile">
+              <div class="label">ADR 局均伤害</div>
+              <div class="value">{{ '%.1f' % ((stats.career.adr or stats.best_season.adr or 0)|float) }}</div>
+              <div class="sub">火力压制</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">KPR 局均击杀</div>
+              <div class="value">{{ '%.2f' % ((stats.career.kpr or 0)|float) }}</div>
+              <div class="sub">每回合人头</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">RWS 胜局贡献</div>
+              <div class="value">{{ '%.2f' % ((stats.career.rws or 0)|float) }}</div>
+              <div class="sub">关键回合占比</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">胜场 / 败场</div>
+              <div class="value" style="font-size: 15px;">
+                <span style="color: var(--color-win)">{{ stats.career.win_total or 0 }}W</span> / 
+                <span style="color: var(--color-loss)">{{ stats.career.loss_total or 0 }}L</span>
+              </div>
+              <div class="sub">{{ stats.career.tie_total or 0 }} 平局</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">HS% 爆头率</div>
+              {% set hs_pct = (stats.career.headshot_total / stats.career.kill_total * 100) if (stats.career and stats.career.kill_total and stats.career.headshot_total) else ((stats.career.per_headshot|float * 100) if (stats.career and stats.career.per_headshot) else (stats.career.headshot_rate or 0)) %}
+              <div class="value">{{ '%.1f' % hs_pct }}%</div>
+              <div class="sub">精准爆头</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">天梯最高段位</div>
+              <div class="value" style="color: #ff8800;">
+                {{ stats.career.best_season or '2025S4' }}
+              </div>
+              <div class="sub">最佳赛季</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">全服天梯排名</div>
+              <div class="value" style="font-size: 15px;">
+                {{ '#' + stats.career.rank|string if (stats.career and stats.career.rank) else '---' }}
+              </div>
+              <div class="sub">Ladder Rank</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">连胜记录</div>
+              <div class="value" style="color: #fbbf24;">{{ stats.career.win_streak or 0 }} 连胜</div>
+              <div class="sub">Win Streak</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">平局场次</div>
+              <div class="value">{{ stats.career.tie_total or 0 }}</div>
+              <div class="sub">拉锯胶着局</div>
+            </div>
+            <div class="stat-tile">
+              <div class="label">残局胜利</div>
+              <div class="value" style="color: #ff8800;">{{ combat.clutch_wins or 0 }}</div>
+              <div class="sub">终局兜底</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5E 专属角色定位战术卡片 -->
+      {% if stats.role and stats.role.role_name %}
+      <div class="role-card-5e">
+        <div class="role-left">
+          <div class="role-icon-box">🎖️</div>
+          <div>
+            <div class="role-name-text">
+              {{ stats.role.role_name }}
+              {% if stats.role.score_level %}
+              <span style="font-size: 11px; background: rgba(255, 107, 0, 0.25); border: 1px solid #ff8800; border-radius: 4px; padding: 1px 6px; color: #fed7aa;">{{ stats.role.score_level }}</span>
+              {% endif %}
+            </div>
+            <div class="role-desc-text">{{ stats.role.role_desc or '该选手在队伍中扮演关键战术枢纽' }}</div>
+          </div>
+        </div>
+        {% if stats.role.role_tags %}
+        <div class="role-tags-group">
+          {% for tag in stats.role.role_tags %}
+          <div class="role-tag-pill">{{ tag }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- 高光与多杀数据紧凑条 -->
+      <div class="highlight-bar">
+        <div class="highlight-item">
+          <div class="highlight-label"><span>🎯</span> 首杀破点</div>
+          <div class="highlight-val">{{ combat.first_kills or 0 }}</div>
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-label"><span>💥</span> 多杀回合</div>
+          <div class="highlight-val">{{ combat.multi_kills or 0 }}</div>
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-label"><span>🛡️</span> 残局胜利</div>
+          <div class="highlight-val">{{ combat.clutch_wins or 0 }}</div>
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-label"><span>⚔️</span> 关键多杀分布</div>
+          <div class="highlight-val">
+            {{ combat.summary_cards[3].value if (combat.summary_cards and combat.summary_cards|length > 3) else '---' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 最近 5 场比赛走势 -->
+      {% if stats.recent_matches %}
+      <div>
+        <div class="section-title">近期战绩走势 · RECENT MATCHES</div>
+        <div class="recent-matches-row">
+          {% for match in stats.recent_matches[:5] %}
+          {% set is_win = match.is_win %}
+          {% set is_tie = match.is_tie %}
+          {% set res_cls = 'win' if is_win else ('draw' if is_tie else 'loss') %}
+          {% set res_txt = '胜利' if is_win else ('平局' if is_tie else '失败') %}
+          {% set sc = match.score or (match.group1_all_score ~ ':' ~ match.group2_all_score if match.group1_all_score else '--:--') %}
+          <div class="mini-match-card {{ res_cls }}">
+            <div class="mini-match-res">{{ res_txt }}</div>
+            <div class="mini-match-map">{{ match.map_desc or match.map_name or match.map or '未知地图' }}</div>
+            <div class="mini-match-score">{{ sc }}</div>
+            <div class="mini-match-rating">
+              Rating {{ match.rating or '0.00' }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- LLM 玩家生涯战术画像 -->
+      <div class="llm-section">
+        <div class="llm-header">
+          <div class="llm-brand">
+            <span style="font-size: 13px;">🧠</span> 5E ARENA TACTICAL PROFILE · 5E 生涯战力风格画像
+          </div>
+          <div style="font-size: 11px; color: #ff8800; font-weight: 700;">5E PRO ANALYST V2</div>
+        </div>
+
+        <div class="llm-title-text">{{ llm_title or '强权突破·天梯高分核心' }}</div>
+
+        {% if llm_sections and llm_sections|length > 1 %}
+        <div class="llm-grid">
+          {% for sec in llm_sections %}
+          <div class="llm-card sec-{{ loop.index }}">
+            <div class="llm-card-tag">
+              {% if '定位' in sec.tag or '战力' in sec.tag %}
+                <span>👑</span>
+              {% elif '风格' in sec.tag or '技术' in sec.tag or '枪法' in sec.tag %}
+                <span>⚡</span>
+              {% elif '武器' in sec.tag or '地图' in sec.tag %}
+                <span>⚔️</span>
+              {% elif '建议' in sec.tag or '进阶' in sec.tag %}
+                <span>🎯</span>
+              {% else %}
+                <span>📌</span>
+              {% endif %}
+              {{ sec.tag }}
+            </div>
+            <div class="llm-card-body">{{ sec.content }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="fallback-detail">{{ llm_detail or '该玩家5E天梯数据沉淀深厚，展现出强劲的对抗韧性与持续上分潜质。' }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 底部标注栏 -->
+    <div class="footer-bar">
+      <div>5E Arena Data Engine · Verified</div>
+      <div>Generated by Shizuku CS Pro · {{ now }}</div>
+    </div>
+  </div>
 </body>
 </html>

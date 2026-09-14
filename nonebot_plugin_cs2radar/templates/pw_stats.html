@@ -121,6 +121,76 @@
       background: var(--text-muted);
     }
 
+    .official-meta-row {
+      margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 8px;
+      padding: 4px 10px;
+    }
+
+    .official-level-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .official-level-icon {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+    }
+
+    .official-level-text {
+      font-size: 11px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .official-progress-bar-wrap {
+      width: 60px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .official-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #00b4d8, #38bdf8);
+      border-radius: 3px;
+    }
+
+    .official-progress-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .official-drop-tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #34d399;
+    }
+
+    .official-drop-tag .drop-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.8);
+    }
+
     /* 顶部天梯积分胶囊 */
     .rank-capsule-group {
       display: flex;
@@ -572,6 +642,26 @@
             <span style="color: #38bdf8; font-weight: 600;">「{{ player.summary.description }}」</span>
             {% endif %}
           </div>
+          {% if player.official_info and player.official_info.curLevel and player.official_info.curLevel > 0 %}
+          <div class="official-meta-row">
+            <div class="official-level-badge">
+              {% if player.official_info.level_icon_data_uri %}
+              <img src="{{ player.official_info.level_icon_data_uri }}" class="official-level-icon" alt="" />
+              {% endif %}
+              <span class="official-level-text">官匹 Lv.{{ player.official_info.curLevel }} {{ player.official_info.levelTitle or '' }}</span>
+            </div>
+            <div class="official-progress-bar-wrap">
+              <div class="official-progress-bar" style="width: {{ player.official_info.levelUpProgress or 0 }}%;"></div>
+            </div>
+            <span class="official-progress-text">{{ player.official_info.levelUpProgress or 0 }}%</span>
+            {% if player.official_info.statusDesc %}
+            <span class="official-drop-tag">
+              <span class="drop-dot"></span>
+              {{ player.official_info.statusDesc }}
+            </span>
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
       </div>
 
@@ -602,7 +692,7 @@
       <div>
         <div class="section-title">核心战力指标 · CAREER PERFORMANCE</div>
         <div class="hero-stats-grid">
-          {% set r = ((player.stats.pwRating if player.stats.pwRating is not none else player.stats.rating) or 0)|float %}
+          {% set r = (player.stats.pwRating or player.stats.rating or 0)|float %}
           <div class="hero-rating-card">
             <div class="hero-rating-label">RATING 2.0</div>
             <div class="hero-rating-val">{{ '%.2f' % r }}</div>
@@ -803,18 +893,18 @@
             <div class="llm-card-tag">
               {% if '定位' in sec.tag or '战力' in sec.tag %}
                 <span>👑</span>
-              {% elif '风格' in sec.tag or '技术' in sec.tag or '枪法' in sec.tag %}
+              {% elif '风格' in sec.tag or '技术' in sec.tag or '枪法' in sec.tag or '对标' in sec.tag %}
                 <span>⚡</span>
-              {% elif '武器' in sec.tag or '地图' in sec.tag %}
+              {% elif '武器' in sec.tag or '地图' in sec.tag or '偏科' in sec.tag %}
                 <span>⚔️</span>
-              {% elif '建议' in sec.tag or '进阶' in sec.tag %}
+              {% elif '建议' in sec.tag or '进阶' in sec.tag or '瓶颈' in sec.tag or '突破' in sec.tag %}
                 <span>🎯</span>
               {% else %}
                 <span>📌</span>
               {% endif %}
               {{ sec.tag }}
             </div>
-            <div class="llm-card-body">{{ sec.content }}</div>
+            <div class="llm-card-body">{{ sec.content or sec.body }}</div>
           </div>
           {% endfor %}
         </div>

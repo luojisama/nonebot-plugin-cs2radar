@@ -17,7 +17,10 @@ LEGACY_DATA_DIRS = [
 
 
 def get_data_dir() -> Path:
-    return localstore.get_plugin_data_dir()
+    try:
+        return localstore.get_plugin_data_dir()
+    except Exception:
+        return localstore.get_data_dir(PLUGIN_DATA_DIR_NAME)
 
 
 def get_bind_db_path(configured_path: str | None = None) -> Path:

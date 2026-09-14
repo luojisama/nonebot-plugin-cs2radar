@@ -27,7 +27,7 @@ from .renderer import (
 )
 from .storage import get_bind_db_path
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 plugin_config = get_plugin_config(Config)
 driver_config = get_driver().config
@@ -52,19 +52,25 @@ for legacy_name in (
     if getattr(plugin_config, legacy_name, None) is not None:
         logger.warning(f"[nonebot_plugin_cs2radar] `{legacy_name}` is deprecated; migrate to `cs2radar_*` config names.")
 
+_USAGE_HELP = """CS2 Radar 插件命令一览：
+1. 职业与赛事：
+  - cs查询 <选手名> - 查询职业选手资料卡与能力评分 (别名: cs选手, csplayer)
+  - cs赛事 - 查询近期重要赛事与进行中比赛 (别名: 赛事, csgo赛事, cs2赛事)
+  - 赛果 - 查询近几日完赛比分与赛果 (别名: cs赛果, 赛事赛果)
+2. 平台生涯战绩：
+  - 5e [ID/昵称] [-r] - 查询 5E 平台综合战绩与 4 维智能战术画像 (别名: 5e战绩, 5e查询, cs战绩)
+  - pw [昵称/SteamID] [-r] - 查询完美平台综合战绩与 4 维智能战术画像 (别名: pw战绩, pw查询, 完美战绩)
+  - pwlogin <手机号> <验证码> - 登录完美世界电竞平台并保存本地会话 (别名: 完美登录)
+3. 账号绑定与复盘：
+  - bind <5e|pw> <玩家名> - 绑定当前 QQ 的默认查询对象 (别名: 绑定, 添加)
+  - match [5e|pw|mm] [@群友] [局数] [-r] - 查询最近第 N 把详细对局并生成四维战术复盘 (别名: 战绩, 查询战绩)
+
+说明：命令支持 [-r] 参数强制刷新战绩与 AI 战术分析缓存。未配置大模型时会自动基于选手真实数据智能对标职业哥并诊断天梯瓶颈。"""
+
 __plugin_meta__ = PluginMetadata(
     name="CS2 Radar",
     description="CS2 赛事、选手、5E/完美/官匹战绩查询与详细对局分析",
-    usage=(
-        "cs查询 [选手]\n"
-        "cs赛事\n"
-        "赛果\n"
-        "5e [ID/昵称] [-r]\n"
-        "pw [ID/昵称/SteamID] [-r]\n"
-        "pwlogin [手机号] [验证码]\n"
-        "bind [5e|pw] [玩家名]\n"
-        "match [platform] [@群友] [round] [-r]"
-    ),
+    usage=_USAGE_HELP,
     type="application",
     homepage="https://github.com/luojisama/nonebot-plugin-cs2radar",
     config=Config,
@@ -73,6 +79,34 @@ __plugin_meta__ = PluginMetadata(
         "author": "luojisama",
         "version": __version__,
         "pypi": "nonebot-plugin-cs2radar",
+        "help": _USAGE_HELP,
+        "menu": [
+            {"cmd": "cs查询 <选手>", "desc": "查询职业选手战队与技术画像", "alias": ["cs选手", "csplayer"]},
+            {"cmd": "cs赛事", "desc": "查询近期国际大赛与重要赛程", "alias": ["赛事", "csgo赛事", "cs2赛事"]},
+            {"cmd": "赛果", "desc": "查询近几日比赛赛果与比分", "alias": ["cs赛果", "赛事赛果"]},
+            {"cmd": "5e [ID/昵称] [-r]", "desc": "查询 5E 平台综合战绩与 4 维智能战术画像", "alias": ["5e战绩", "5e查询", "cs战绩"]},
+            {"cmd": "pw [ID/昵称/SteamID] [-r]", "desc": "查询完美平台综合战绩与 4 维智能战术画像", "alias": ["pw战绩", "pw查询", "完美战绩"]},
+            {"cmd": "pwlogin <手机号> <验证码>", "desc": "登录完美平台获取会话态", "alias": ["完美登录"]},
+            {"cmd": "bind <5e|pw> <玩家名>", "desc": "绑定当前 QQ 的常用查询玩家", "alias": ["绑定", "添加"]},
+            {"cmd": "match [5e|pw|mm] [@群友] [局数] [-r]", "desc": "查询最近第 N 把详细对局并生成四维战术复盘", "alias": ["战绩", "查询战绩"]},
+        ],
+        "configs": {
+            "cs2radar_priority": "插件优先级 (默认: 5)",
+            "cs2radar_bind_db_path": "绑定数据库路径 (默认: 自动定位至 localstore)",
+            "cs2radar_http_timeout": "HTTP 请求超时秒数 (默认: 15)",
+            "cs2radar_llm_enabled": "是否启用 LLM 战术分析与智能对标 (默认: true)",
+            "cs2radar_llm_api_type": "LLM 接口类型 (openai/gemini/anthropic, 默认: openai)",
+            "cs2radar_llm_api_url": "LLM 接口地址 (默认: https://api.openai.com/v1)",
+            "cs2radar_llm_api_key": "LLM API Key",
+            "cs2radar_llm_model": "LLM 模型名称 (默认: gpt-4o-mini)",
+            "cs2radar_llm_backup_enabled": "是否启用备用 LLM (默认: false)",
+            "cs2radar_llm_backup_api_type": "备用 LLM 接口类型",
+            "cs2radar_llm_backup_api_url": "备用 LLM 接口地址",
+            "cs2radar_llm_backup_api_key": "备用 LLM API Key",
+            "cs2radar_llm_backup_model": "备用 LLM 模型名称",
+            "cs2radar_llm_timeout": "LLM 请求超时秒数 (默认: 30)",
+            "cs2radar_llm_system_prompt": "自定义战术复盘 System Prompt",
+        },
     },
 )
 
@@ -171,7 +205,7 @@ def _parse_llm_sections(text: str) -> list[dict]:
     return [{"tag": "复盘点评", "content": text.strip()}]
 
 
-def _build_profile_context_5e(data: dict) -> dict:
+def _build_profile_context_5e(data: dict, hltv_benchmarks: list[dict] | None = None) -> dict:
     nickname = data.get("nickname", "5E玩家")
     stats = data.get("stats", {})
     career = stats.get("career", {})
@@ -205,7 +239,7 @@ def _build_profile_context_5e(data: dict) -> dict:
             "adr": rm.get("adr"),
         })
 
-    return {
+    ctx = {
         "platform": "5E ARENA 对战平台",
         "player_name": nickname,
         "elo": career.get("elo_9") or career.get("elo", 0),
@@ -224,9 +258,12 @@ def _build_profile_context_5e(data: dict) -> dict:
         "role_level": role.get("score_level", ""),
         "recent_matches": recent_list,
     }
+    if hltv_benchmarks:
+        ctx["hltv_pro_benchmarks"] = hltv_benchmarks[:6]
+    return ctx
 
 
-def _build_profile_context(data: dict) -> dict:
+def _build_profile_context(data: dict, hltv_benchmarks: list[dict] | None = None) -> dict:
     summary = data.get("summary", {})
     stats = data.get("stats", {})
     recent_matches = data.get("recent_matches", [])
@@ -258,7 +295,7 @@ def _build_profile_context(data: dict) -> dict:
         for rm in recent_matches[:5]
     ]
 
-    return {
+    ctx = {
         "player_name": summary.get("nickname", "未知"),
         "steam_id": str(summary.get("steamId", "")),
         "season": stats.get("seasonId", "当前赛季"),
@@ -288,6 +325,9 @@ def _build_profile_context(data: dict) -> dict:
         "hot_weapons": hot_weapons,
         "recent_matches": recent_list
     }
+    if hltv_benchmarks:
+        ctx["hltv_pro_benchmarks"] = hltv_benchmarks[:6]
+    return ctx
 
 
 def _build_match_view_data(match_data, llm_title: str, llm_detail: str) -> dict:
@@ -439,15 +479,25 @@ async def handle_match(bot: Bot, event: MessageEvent, args: Message = CommandArg
     except Exception as e:
         await match_cmd.finish(f"查询失败: {e}")
 
-    llm_title = "评价暂不可用"
-    llm_detail = "未配置或调用失败，本次仅展示战绩数据。"
+    llm_title = "风格待定"
+    llm_detail = "【战局走势】比赛数据分析中。【核心表现】战术复盘计算中。【团队对比】正在比对双方攻防数据。【改进建议】保持稳定沟通与道具配合。"
     try:
         result = await llm.evaluate(match_data.llm_context(), refresh=refresh)
         if result:
             llm_title = result.title
             llm_detail = result.detail
+        else:
+            fallback = llm._generate_smart_match_fallback(match_data.llm_context())
+            llm_title = fallback.title
+            llm_detail = fallback.detail
     except Exception as e:
         logger.warning(f"[cs2radar] llm evaluate failed: {e}")
+        try:
+            fallback = llm._generate_smart_match_fallback(match_data.llm_context())
+            llm_title = fallback.title
+            llm_detail = fallback.detail
+        except Exception:
+            pass
 
     view_data = _build_match_view_data(match_data, llm_title, llm_detail)
     image_bytes = await render_match_detail_card(view_data)
@@ -591,7 +641,12 @@ async def handle_five_e_stats(bot: Bot, event: MessageEvent, arg: Message = Comm
 
         # 生成 / 获取 LLM 主页评价
         try:
-            profile_ctx = _build_profile_context_5e(data)
+            benchmarks = []
+            try:
+                benchmarks = await event_crawler.get_hltv_pro_benchmarks()
+            except Exception:
+                pass
+            profile_ctx = _build_profile_context_5e(data, hltv_benchmarks=benchmarks)
             career = data.get("stats", {}).get("career", {})
             cnt = int(career.get("match_total") or 0)
             season_id = str(career.get("best_season") or "")
@@ -603,19 +658,15 @@ async def handle_five_e_stats(bot: Bot, event: MessageEvent, arg: Message = Comm
                 match_cnt=cnt,
                 season_id=season_id,
             )
-            if llm_res:
-                data["llm_title"] = llm_res.title
-                data["llm_detail"] = llm_res.detail
-                data["llm_sections"] = _parse_llm_sections(llm_res.detail)
-            else:
-                data["llm_title"] = "天梯强力进攻先锋"
-                data["llm_detail"] = "【战力定位】在5E高分天梯打出极高攻防效率。【技术风格】拼抢激进，单兵摧毁力强。【武器地图】主力枪械覆盖全面。【进阶建议】保持进攻侵略性，协同团队进退。"
-                data["llm_sections"] = _parse_llm_sections(data["llm_detail"])
+            data["llm_title"] = llm_res.title
+            data["llm_detail"] = llm_res.detail
+            data["llm_sections"] = _parse_llm_sections(llm_res.detail)
         except Exception as e:
             logger.warning(f"生成5E主页LLM评价失败: {e}")
-            data["llm_title"] = "天梯强力进攻先锋"
-            data["llm_detail"] = "【战力定位】在5E高分天梯打出极高攻防效率。【技术风格】拼抢激进，单兵摧毁力强。【武器地图】主力枪械覆盖全面。【进阶建议】保持进攻侵略性，协同团队进退。"
-            data["llm_sections"] = _parse_llm_sections(data["llm_detail"])
+            fallback_res = llm._generate_smart_profile_fallback(_build_profile_context_5e(data))
+            data["llm_title"] = fallback_res.title
+            data["llm_detail"] = fallback_res.detail
+            data["llm_sections"] = _parse_llm_sections(fallback_res.detail)
 
         image_bytes = await render_stats_card(data)
         await five_e_stats.finish(MessageSegment.image(image_bytes))
@@ -714,7 +765,12 @@ async def handle_pw_stats(bot: Bot, event: MessageEvent, arg: Message = CommandA
 
         # 生成 / 获取 LLM 主页评价
         try:
-            profile_ctx = _build_profile_context(data)
+            benchmarks = []
+            try:
+                benchmarks = await event_crawler.get_hltv_pro_benchmarks()
+            except Exception:
+                pass
+            profile_ctx = _build_profile_context(data, hltv_benchmarks=benchmarks)
             cnt = data.get("stats", {}).get("cnt", 0)
             season_id = str(data.get("stats", {}).get("seasonId") or "")
             llm_res = await llm.evaluate_profile(
@@ -724,19 +780,15 @@ async def handle_pw_stats(bot: Bot, event: MessageEvent, arg: Message = CommandA
                 match_cnt=cnt,
                 season_id=season_id,
             )
-            if llm_res:
-                data["llm_title"] = llm_res.title
-                data["llm_detail"] = llm_res.detail
-                data["llm_sections"] = _parse_llm_sections(llm_res.detail)
-            else:
-                data["llm_title"] = "全能型竞技核心"
-                data["llm_detail"] = "该玩家数据积累中，展现出扎实的技术功底与极高的成长潜力。"
-                data["llm_sections"] = []
+            data["llm_title"] = llm_res.title
+            data["llm_detail"] = llm_res.detail
+            data["llm_sections"] = _parse_llm_sections(llm_res.detail)
         except Exception as e:
             logger.warning(f"生成主页LLM评价失败: {e}")
-            data["llm_title"] = "全能型竞技核心"
-            data["llm_detail"] = "该玩家数据积累中，展现出扎实的技术功底与极高的成长潜力。"
-            data["llm_sections"] = []
+            fallback_res = llm._generate_smart_profile_fallback(_build_profile_context(data))
+            data["llm_title"] = fallback_res.title
+            data["llm_detail"] = fallback_res.detail
+            data["llm_sections"] = _parse_llm_sections(fallback_res.detail)
 
         image_bytes = await render_pw_stats_card(data)
         await pw_stats.finish(MessageSegment.image(image_bytes))
